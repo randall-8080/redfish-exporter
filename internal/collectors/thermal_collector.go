@@ -8,12 +8,17 @@ import (
 	"github.com/stmcginnis/gofish/common"
 )
 
+// Todo: Add chassis label to baseLabels
+// Todo: move target to constant labels?
+// Todo: Handle ThermalSubsystem vs. legacy Thermal resource - some systems may have both
 type ThermalCollector struct {
 	target string
 	client *gofish.APIClient
 	logger *slog.Logger
 
 	// descriptors
+	ThermalSubsystemStatusDesc *prometheus.Desc
+
 	tempDesc       *prometheus.Desc
 	tempStatusDesc *prometheus.Desc
 	fanDesc        *prometheus.Desc
@@ -27,6 +32,11 @@ func NewThermalCollector(target string, client *gofish.APIClient, logger *slog.L
 		client: client,
 		logger: logger,
 
+		ThermalSubsystemStatusDesc: prometheus.NewDesc(
+			"redfish_thermal_subsystem_status",
+			"The overall status of the thermal subsystem",
+			append(baseLabels, "chassis", "health"), nil, // todo: move target to constant labels?
+		),
 		tempDesc: prometheus.NewDesc(
 			"redfish_temperature_celsius",
 			"Redfish thermal temperature readings in Celsius",
@@ -52,6 +62,7 @@ func NewThermalCollector(target string, client *gofish.APIClient, logger *slog.L
 
 // Describe sends the super-set of all possible descriptors of metrics collected by this Collector.
 func (c *ThermalCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- c.ThermalSubsystemStatusDesc
 	ch <- c.tempDesc
 	ch <- c.tempStatusDesc
 	ch <- c.fanDesc
@@ -66,11 +77,23 @@ func (c *ThermalCollector) Collect(ch chan<- prometheus.Metric) {
 		c.logger.Error("failed to get chassis", "error", err, "target", c.target)
 		return
 	}
-	c.logger.Debug("got chassis", "count", len(chassies), "target", c.target)
-
 	// Read thermal data from all chassis
 	// Some systems may have multiple chassis (e.g., blade enclosures)
 	for _, chassis := range chassies {
+
+		// Check for thermal subsystem presence
+		thewrmalSubsystem, err := chassis.ThermalSubsystem()
+		if err != nil || thewrmalSubsystem == nil {
+			c.logger.Debug("thermal subsystem not present", "chassis", chassis.ID, "target", c.target)
+		} else {
+			ch <- prometheus.MustNewConstMetric(
+				c.ThermalSubsystemStatusDesc,
+				prometheus.GaugeValue,
+				1.0, // thermal subsystem present
+				[]string{c.target, chassis.ID, string(thewrmalSubsystem.Status.Health)}...,
+			)
+		}
+
 		thermal, err := chassis.Thermal()
 		if err != nil {
 			c.logger.Debug("failed to get thermal data", "error", err, "chassis", chassis.ID, "target", c.target)
