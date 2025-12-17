@@ -46,49 +46,49 @@ func NewPowerCollector(target string, client *gofish.APIClient, logger *slog.Log
 		powerCapacityDesc: prometheus.NewDesc(
 			prometheus.BuildFQName("redfish", "power", "capacity_watts"),
 			"Power capacity overall of the chassis in Watts",
-			append(powerBaseLabels, "name"),
+			append(powerBaseLabels, "name", "member_id"),
 			prometheus.Labels{"target": target},
 		),
 		// PowerAllocatedWatts
 		powerConsumedDesc: prometheus.NewDesc(
 			prometheus.BuildFQName("redfish", "power", "consumed_watts"),
 			"Power consumed currently of the chassis in Watts",
-			append(powerBaseLabels, "name"),
+			append(powerBaseLabels, "name", "member_id"),
 			prometheus.Labels{"target": target},
 		),
 		// PowerAverageConsumedWatts
 		powerAverageConsumedDesc: prometheus.NewDesc(
 			prometheus.BuildFQName("redfish", "power_metrics", "average_consumed_watts"),
 			"Power average consumed of the chassis in Watts",
-			append(powerBaseLabels, "name"),
+			append(powerBaseLabels, "name", "member_id"),
 			prometheus.Labels{"target": target},
 		),
 		// PowerMaxConsumedWatts
 		powerMaxConsumedDesc: prometheus.NewDesc(
 			prometheus.BuildFQName("redfish", "power_metrics", "max_consumed_watts"),
 			"Power max consumed of the chassis in Watts",
-			append(powerBaseLabels, "name"),
+			append(powerBaseLabels, "name", "member_id"),
 			prometheus.Labels{"target": target},
 		),
 		// PowerMinConsumedWatts
 		powerMinConsumedDesc: prometheus.NewDesc(
 			prometheus.BuildFQName("redfish", "power_metrics", "min_consumed_watts"),
 			"Power min consumed of the chassis in Watts",
-			append(powerBaseLabels, "name"),
+			append(powerBaseLabels, "name", "member_id"),
 			prometheus.Labels{"target": target},
 		),
 		// PowerredundancyHealth
 		PowerredundancyHealthDesc: prometheus.NewDesc(
 			prometheus.BuildFQName("redfish", "power_redundancy", "health"),
 			"Health status of the power redundancy subsystem",
-			append(powerBaseLabels, "name"),
+			append(powerBaseLabels, "name", "member_id"),
 			prometheus.Labels{"target": target},
 		),
 		// PowerSuppliesHealth
 		powerSuppliesHealthDesc: prometheus.NewDesc(
 			prometheus.BuildFQName("redfish", "power_supplies", "health"),
 			"Health status of the power suppliy device",
-			append(powerBaseLabels, "name"),
+			append(powerBaseLabels, "name", "member_id"),
 			prometheus.Labels{"target": target},
 		),
 	}
@@ -140,35 +140,35 @@ func (c *PowerCollector) Collect(ch chan<- prometheus.Metric) {
 				c.powerCapacityDesc,
 				prometheus.GaugeValue,
 				float64(pc.PowerCapacityWatts),
-				chassis.ID, pc.Name,
+				chassis.ID, pc.Name, pc.MemberID,
 			)
 			// Set the power consumed metric
 			ch <- prometheus.MustNewConstMetric(
 				c.powerConsumedDesc,
 				prometheus.GaugeValue,
 				float64(pc.PowerConsumedWatts),
-				chassis.ID, pc.Name,
+				chassis.ID, pc.Name, pc.MemberID,
 			)
 			// Set the power average consumed metric
 			ch <- prometheus.MustNewConstMetric(
 				c.powerAverageConsumedDesc,
 				prometheus.GaugeValue,
 				float64(pc.PowerMetrics.AverageConsumedWatts),
-				chassis.ID, pc.Name,
+				chassis.ID, pc.Name, pc.MemberID,
 			)
 			// Set the power max consumed metric
 			ch <- prometheus.MustNewConstMetric(
 				c.powerMaxConsumedDesc,
 				prometheus.GaugeValue,
 				float64(pc.PowerMetrics.MaxConsumedWatts),
-				chassis.ID, pc.Name,
+				chassis.ID, pc.Name, pc.MemberID,
 			)
 			// Set the power min consumed metric
 			ch <- prometheus.MustNewConstMetric(
 				c.powerMinConsumedDesc,
 				prometheus.GaugeValue,
 				float64(pc.PowerMetrics.MinConsumedWatts),
-				chassis.ID, pc.Name,
+				chassis.ID, pc.Name, pc.MemberID,
 			)
 			// Set the power redundancy health metric
 			for _, redundancy := range power.Redundancy {
@@ -187,7 +187,7 @@ func (c *PowerCollector) Collect(ch chan<- prometheus.Metric) {
 					c.PowerredundancyHealthDesc,
 					prometheus.GaugeValue,
 					healthValue,
-					chassis.ID, redundancy.Name,
+					chassis.ID, redundancy.Name, redundancy.MemberID,
 				)
 			}
 
@@ -207,7 +207,7 @@ func (c *PowerCollector) Collect(ch chan<- prometheus.Metric) {
 					c.powerSuppliesHealthDesc,
 					prometheus.GaugeValue,
 					healthValue,
-					chassis.ID, ps.Name,
+					chassis.ID, ps.Name, ps.MemberID,
 				)
 			}
 		}
