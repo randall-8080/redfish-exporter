@@ -23,7 +23,7 @@ import (
 
 var (
 	configFile   = kingpin.Flag("config.file", "Redfish exporter configuration file.").Default("config.yaml").ExistingFile()
-	toolkitFlags = kingpinflag.AddFlags(kingpin.CommandLine, ":8000")
+	toolkitFlags = kingpinflag.AddFlags(kingpin.CommandLine, ":9042")
 	metricsPath  = "/metrics"
 	probePath    = "/probe"
 )
