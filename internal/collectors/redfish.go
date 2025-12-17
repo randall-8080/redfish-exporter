@@ -26,7 +26,10 @@ type RedfishCollector struct {
 func NewRedfishCollector(target string, client *gofish.APIClient, logger *slog.Logger, cc config.CollectorsConfig) *RedfishCollector {
 	var subs []namedCollector
 	if cc.Thermal {
-		subs = append(subs, namedCollector{"thermal", NewThermalCollector(target, client, logger, []string{"target"})})
+		subs = append(subs, namedCollector{"thermal", NewThermalCollector(target, client, logger)})
+	}
+	if cc.Power {
+		subs = append(subs, namedCollector{"power", NewPowerCollector(target, client, logger)})
 	}
 
 	return &RedfishCollector{
