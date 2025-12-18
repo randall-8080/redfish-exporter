@@ -32,22 +32,22 @@ func NewThermalCollector(target string, client *gofish.APIClient, logger *slog.L
 		logger: logger,
 
 		tempDesc: prometheus.NewDesc(
-			"redfish_temperature_celsius",
+			prometheus.BuildFQName("redfish", "temperature", "celsius"),
 			"Redfish thermal temperature readings in Celsius",
 			append(thermalBaseLabels, "sensor", "physical_context"), prometheus.Labels{"target": target},
 		),
 		tempStatusDesc: prometheus.NewDesc(
-			"redfish_temperature_status",
+			prometheus.BuildFQName("redfish", "temperature", "status"),
 			"Redfish thermal temperature status health report (1=OK, 0=not OK)",
 			append(thermalBaseLabels, "sensor", "physical_context", "health"), prometheus.Labels{"target": target},
 		),
 		fanDesc: prometheus.NewDesc(
-			"redfish_fan_rpm",
+			prometheus.BuildFQName("redfish", "fan", "rpm"),
 			"Redfish thermal fan speed in RPM",
 			append(thermalBaseLabels, "fan", "physical_context", "unit"), prometheus.Labels{"target": target},
 		),
 		fanStatusDesc: prometheus.NewDesc(
-			"redfish_fan_status",
+			prometheus.BuildFQName("redfish", "fan", "status"),
 			"Redfish thermal fan status health report (1=OK, 0=not OK)",
 			append(thermalBaseLabels, "fan", "physical_context", "health"), prometheus.Labels{"target": target},
 		),
@@ -70,29 +70,27 @@ func (c *ThermalCollector) Collect(ch chan<- prometheus.Metric) {
 		c.logger.Error("failed to get chassis", "error", err, "target", c.target)
 		return
 	}
-	// Read thermal data from all chassis
-	// Some systems may have multiple chassis (e.g., blade enclosures)
 	for _, chassis := range chassies {
-
 		thermal, err := chassis.Thermal()
 		if err != nil {
-			c.logger.Debug("failed to get thermal data", "error", err, "chassis", chassis.ID, "target", c.target)
+			c.logger.Error("failed to get thermal data", "error", err, "chassis", chassis.ID, "target", c.target)
 			continue
 		}
-		c.logger.Debug("got thermal data", "temp_count", len(thermal.Temperatures), "fan_count", len(thermal.Fans), "chassis", chassis.ID, "target", c.target)
-
 		// Export temperature readings and status
 		for _, t := range thermal.Temperatures {
+			// Skip disabled sensors
+			if t.Status.State == common.DisabledState {
+				continue
+			}
 			ch <- prometheus.MustNewConstMetric(
 				c.tempDesc,
 				prometheus.GaugeValue,
-				float64(t.ReadingCelsius),
-				chassis.ID, t.Name, string(t.PhysicalContext),
+				float64(*t.ReadingCelsius),
+				chassis.ID, t.Name, string(*t.PhysicalContext),
 			)
 
 			// Export temperature status as a one-hot metric (1=OK, 0=not OK)
 			if t.Status.State == common.EnabledState {
-				c.logger.Debug("exporting temperature status", "sensor", t.Name, "health", t.Status.Health, "target", c.target)
 				statusValue := 0.0 // all non -OK statuses
 				if t.Status.Health == common.OKHealth {
 					statusValue = 1.0
@@ -101,7 +99,7 @@ func (c *ThermalCollector) Collect(ch chan<- prometheus.Metric) {
 					c.tempStatusDesc,
 					prometheus.GaugeValue,
 					statusValue,
-					chassis.ID, t.Name, string(t.PhysicalContext), string(t.Status.Health),
+					chassis.ID, t.Name, string(*t.PhysicalContext), string(t.Status.Health),
 				)
 			}
 		}
@@ -120,11 +118,10 @@ func (c *ThermalCollector) Collect(ch chan<- prometheus.Metric) {
 			ch <- prometheus.MustNewConstMetric(
 				c.fanDesc,
 				prometheus.GaugeValue,
-				float64(f.Reading),
-				chassis.ID, f.Name, string(f.PhysicalContext), string(f.ReadingUnits),
+				float64(*f.Reading),
+				chassis.ID, f.Name, string(*f.PhysicalContext), string(f.ReadingUnits),
 			)
 			if f.Status.State == common.EnabledState {
-				c.logger.Debug("exporting fan status", "fan", f.Name, "health", f.Status.Health, "target", c.target)
 				statusValue := 0.0 // all non -OK statuses
 				if f.Status.Health == common.OKHealth {
 					statusValue = 1.0
@@ -133,10 +130,9 @@ func (c *ThermalCollector) Collect(ch chan<- prometheus.Metric) {
 					c.fanStatusDesc,
 					prometheus.GaugeValue,
 					statusValue,
-					chassis.ID, f.Name, string(f.PhysicalContext), string(f.Status.Health),
+					chassis.ID, f.Name, string(*f.PhysicalContext), string(f.Status.Health),
 				)
 			}
 		}
-
 	}
 }

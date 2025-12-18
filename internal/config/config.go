@@ -25,6 +25,7 @@ type Auth struct {
 type CollectorsConfig struct {
 	Thermal bool `yaml:"thermal"`
 	Power   bool `yaml:"power"`
+	Systems bool `yaml:"systems"`
 }
 
 func Load(path string) (*Config, error) {

@@ -31,6 +31,9 @@ func NewRedfishCollector(target string, client *gofish.APIClient, logger *slog.L
 	if cc.Power {
 		subs = append(subs, namedCollector{"power", NewPowerCollector(target, client, logger)})
 	}
+	if cc.Systems {
+		subs = append(subs, namedCollector{"systems", NewSystemsCollector(target, client, logger)})
+	}
 
 	return &RedfishCollector{
 		target: target,

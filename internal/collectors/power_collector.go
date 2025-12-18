@@ -139,35 +139,35 @@ func (c *PowerCollector) Collect(ch chan<- prometheus.Metric) {
 			ch <- prometheus.MustNewConstMetric(
 				c.powerCapacityDesc,
 				prometheus.GaugeValue,
-				float64(pc.PowerCapacityWatts),
+				float64(*pc.PowerCapacityWatts),
 				chassis.ID, pc.Name, pc.MemberID,
 			)
 			// Set the power consumed metric
 			ch <- prometheus.MustNewConstMetric(
 				c.powerConsumedDesc,
 				prometheus.GaugeValue,
-				float64(pc.PowerConsumedWatts),
+				float64(*pc.PowerConsumedWatts),
 				chassis.ID, pc.Name, pc.MemberID,
 			)
 			// Set the power average consumed metric
 			ch <- prometheus.MustNewConstMetric(
 				c.powerAverageConsumedDesc,
 				prometheus.GaugeValue,
-				float64(pc.PowerMetrics.AverageConsumedWatts),
+				float64(*pc.PowerMetrics.AverageConsumedWatts),
 				chassis.ID, pc.Name, pc.MemberID,
 			)
 			// Set the power max consumed metric
 			ch <- prometheus.MustNewConstMetric(
 				c.powerMaxConsumedDesc,
 				prometheus.GaugeValue,
-				float64(pc.PowerMetrics.MaxConsumedWatts),
+				float64(*pc.PowerMetrics.MaxConsumedWatts),
 				chassis.ID, pc.Name, pc.MemberID,
 			)
 			// Set the power min consumed metric
 			ch <- prometheus.MustNewConstMetric(
 				c.powerMinConsumedDesc,
 				prometheus.GaugeValue,
-				float64(pc.PowerMetrics.MinConsumedWatts),
+				float64(*pc.PowerMetrics.MinConsumedWatts),
 				chassis.ID, pc.Name, pc.MemberID,
 			)
 			// Set the power redundancy health metric
