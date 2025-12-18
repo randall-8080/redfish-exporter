@@ -1,0 +1,17 @@
+modules:
+  default:
+    auth:
+      username: redfish
+      password: redfish
+    collectors:
+      thermal: false
+      power: true
+    insecure: true
+
+  thermal_only:
+    auth:
+      username: redfish
+    collectors:
+      thermal: true
+      power: false
+    insecure: true
