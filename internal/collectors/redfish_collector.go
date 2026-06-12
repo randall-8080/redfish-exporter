@@ -18,7 +18,6 @@ type namedCollector struct {
 type RedfishCollector struct {
 	target string
 	subs   []namedCollector
-	logger *slog.Logger
 
 	durationDesc *prometheus.Desc
 }
@@ -33,6 +32,9 @@ func NewRedfishCollector(target string, client *gofish.APIClient, logger *slog.L
 	}
 	if cc.Systems {
 		subs = append(subs, namedCollector{"systems", NewSystemsCollector(target, client, logger)})
+	}
+	if cc.Memory {
+		subs = append(subs, namedCollector{"memory", NewMemoryCollector(target, client, logger)})
 	}
 
 	return &RedfishCollector{

@@ -6,6 +6,7 @@ modules:
     collectors:
       thermal: false
       power: true
+      memory: true
     insecure: true
 
   thermal_only:
@@ -14,4 +15,5 @@ modules:
     collectors:
       thermal: true
       power: false
+      memory: false
     insecure: true
