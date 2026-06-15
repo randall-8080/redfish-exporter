@@ -21,7 +21,7 @@ type PowerCollector struct {
 	powerAverageConsumedDesc  *prometheus.Desc
 	powerMaxConsumedDesc      *prometheus.Desc
 	powerMinConsumedDesc      *prometheus.Desc
-	PowerredundancyHealthDesc *prometheus.Desc
+	powerRedundancyHealthDesc *prometheus.Desc
 	powerSuppliesHealthDesc   *prometheus.Desc
 }
 
@@ -49,7 +49,6 @@ func NewPowerCollector(target string, client *gofish.APIClient, logger *slog.Log
 			append(powerBaseLabels, "name", "member_id"),
 			prometheus.Labels{"target": target},
 		),
-		// PowerAllocatedWatts
 		powerConsumedDesc: prometheus.NewDesc(
 			prometheus.BuildFQName("redfish", "power", "consumed_watts"),
 			"Power consumed currently of the chassis in Watts",
@@ -77,8 +76,7 @@ func NewPowerCollector(target string, client *gofish.APIClient, logger *slog.Log
 			append(powerBaseLabels, "name", "member_id"),
 			prometheus.Labels{"target": target},
 		),
-		// PowerredundancyHealth
-		PowerredundancyHealthDesc: prometheus.NewDesc(
+		powerRedundancyHealthDesc: prometheus.NewDesc(
 			prometheus.BuildFQName("redfish", "power_redundancy", "health"),
 			"Health status of the power redundancy subsystem",
 			append(powerBaseLabels, "name", "member_id"),
@@ -102,7 +100,7 @@ func (c *PowerCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.powerAverageConsumedDesc
 	ch <- c.powerMaxConsumedDesc
 	ch <- c.powerMinConsumedDesc
-	ch <- c.PowerredundancyHealthDesc
+	ch <- c.powerRedundancyHealthDesc
 	ch <- c.powerSuppliesHealthDesc
 }
 
@@ -179,7 +177,7 @@ func (c *PowerCollector) Collect(ch chan<- prometheus.Metric) {
 				healthValue = 0.0
 			}
 			ch <- prometheus.MustNewConstMetric(
-				c.PowerredundancyHealthDesc,
+				c.powerRedundancyHealthDesc,
 				prometheus.GaugeValue,
 				healthValue,
 				chassis.ID, redundancy.Name, redundancy.MemberID,

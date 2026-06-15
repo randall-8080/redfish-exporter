@@ -14,8 +14,6 @@ type ThermalCollector struct {
 	logger *slog.Logger
 
 	// descriptors
-	ThermalSubsystemStatusDesc *prometheus.Desc
-
 	tempDesc       *prometheus.Desc
 	tempStatusDesc *prometheus.Desc
 	fanDesc        *prometheus.Desc
