@@ -52,6 +52,47 @@ scrape_configs:
         replacement: redfish_exporter:9042  # Redfish Exporter address 
 ```
 
+## Metrics
+
+### Health encoding
+
+Redfish reports component health as an enum: `OK`, `Warning`, or `Critical`. This exporter maps those values to floats in two patterns depending on the metric:
+
+**Three-valued** — used where `Warning` is a distinct, actionable state (power redundancy, power supplies):
+
+| Redfish Health | Value |
+|---|---|
+| OK | 1.0 |
+| Warning | 0.5 |
+| Critical | 0.0 |
+
+**Binary** — used for sensors where any non-OK state should alert (temperatures, fans, memory, system rollup):
+
+| Redfish Health | Value |
+|---|---|
+| OK | 1.0 |
+| Warning / Critical | 0.0 |
+
+Binary health metrics also carry a `health` label with the raw Redfish string (`OK`, `Warning`, `Critical`), so the actual severity is still queryable even though the value is 0 for both non-OK states:
+
+```promql
+redfish_temperature_status{health="Warning"} == 0
+redfish_temperature_status{health="Critical"} == 0
+```
+
+### Metric reference
+
+| Metric | Health encoding | Labels |
+|---|---|---|
+| `redfish_system_status_health_rollup` | binary | `target`, `system_id` |
+| `redfish_temperature_status` | binary | `target`, `chassis_id`, `sensor`, `physical_context`, `health` |
+| `redfish_fan_status` | binary | `target`, `chassis_id`, `fan`, `physical_context`, `health` |
+| `redfish_memory_status` | binary | `target`, `system_id`, `memory_id`, `memory_location`, `health` |
+| `redfish_power_redundancy_health` | three-valued | `target`, `chassis_id`, `name`, `member_id` |
+| `redfish_power_supplies_health` | three-valued | `target`, `chassis_id`, `name`, `member_id` |
+
+Disabled or absent components are skipped entirely — they produce no metric rather than a zero value.
+
 ## License
 
 See LICENSE file for details.
