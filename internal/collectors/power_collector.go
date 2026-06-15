@@ -135,81 +135,74 @@ func (c *PowerCollector) Collect(ch chan<- prometheus.Metric) {
 		}
 
 		for _, pc := range power.PowerControl {
-			// Set the power capacity metric
 			ch <- prometheus.MustNewConstMetric(
 				c.powerCapacityDesc,
 				prometheus.GaugeValue,
 				float64(*pc.PowerCapacityWatts),
 				chassis.ID, pc.Name, pc.MemberID,
 			)
-			// Set the power consumed metric
 			ch <- prometheus.MustNewConstMetric(
 				c.powerConsumedDesc,
 				prometheus.GaugeValue,
 				float64(*pc.PowerConsumedWatts),
 				chassis.ID, pc.Name, pc.MemberID,
 			)
-			// Set the power average consumed metric
 			ch <- prometheus.MustNewConstMetric(
 				c.powerAverageConsumedDesc,
 				prometheus.GaugeValue,
 				float64(*pc.PowerMetrics.AverageConsumedWatts),
 				chassis.ID, pc.Name, pc.MemberID,
 			)
-			// Set the power max consumed metric
 			ch <- prometheus.MustNewConstMetric(
 				c.powerMaxConsumedDesc,
 				prometheus.GaugeValue,
 				float64(*pc.PowerMetrics.MaxConsumedWatts),
 				chassis.ID, pc.Name, pc.MemberID,
 			)
-			// Set the power min consumed metric
 			ch <- prometheus.MustNewConstMetric(
 				c.powerMinConsumedDesc,
 				prometheus.GaugeValue,
 				float64(*pc.PowerMetrics.MinConsumedWatts),
 				chassis.ID, pc.Name, pc.MemberID,
 			)
-			// Set the power redundancy health metric
-			for _, redundancy := range power.Redundancy {
+		}
 
-				// Todo: Is there a better way to convert Health to a numeric value?
-				healthValue := 0.0
-				switch redundancy.Status.Health {
-				case common.OKHealth:
-					healthValue = 1.0
-				case common.WarningHealth:
-					healthValue = 0.5
-				case common.CriticalHealth:
-					healthValue = 0.0
-				}
-				ch <- prometheus.MustNewConstMetric(
-					c.PowerredundancyHealthDesc,
-					prometheus.GaugeValue,
-					healthValue,
-					chassis.ID, redundancy.Name, redundancy.MemberID,
-				)
+		for _, redundancy := range power.Redundancy {
+			// Todo: Is there a better way to convert Health to a numeric value?
+			healthValue := 0.0
+			switch redundancy.Status.Health {
+			case common.OKHealth:
+				healthValue = 1.0
+			case common.WarningHealth:
+				healthValue = 0.5
+			case common.CriticalHealth:
+				healthValue = 0.0
 			}
+			ch <- prometheus.MustNewConstMetric(
+				c.PowerredundancyHealthDesc,
+				prometheus.GaugeValue,
+				healthValue,
+				chassis.ID, redundancy.Name, redundancy.MemberID,
+			)
+		}
 
-			// Set the power supplies health metric
-			for _, ps := range power.PowerSupplies {
-				// Todo: Is there a better way to convert Health to a numeric value?
-				healthValue := 0.0
-				switch ps.Status.Health {
-				case common.OKHealth:
-					healthValue = 1.0
-				case common.WarningHealth:
-					healthValue = 0.5
-				case common.CriticalHealth:
-					healthValue = 0.0
-				}
-				ch <- prometheus.MustNewConstMetric(
-					c.powerSuppliesHealthDesc,
-					prometheus.GaugeValue,
-					healthValue,
-					chassis.ID, ps.Name, ps.MemberID,
-				)
+		for _, ps := range power.PowerSupplies {
+			// Todo: Is there a better way to convert Health to a numeric value?
+			healthValue := 0.0
+			switch ps.Status.Health {
+			case common.OKHealth:
+				healthValue = 1.0
+			case common.WarningHealth:
+				healthValue = 0.5
+			case common.CriticalHealth:
+				healthValue = 0.0
 			}
+			ch <- prometheus.MustNewConstMetric(
+				c.powerSuppliesHealthDesc,
+				prometheus.GaugeValue,
+				healthValue,
+				chassis.ID, ps.Name, ps.MemberID,
+			)
 		}
 
 	}

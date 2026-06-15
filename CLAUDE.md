@@ -15,7 +15,8 @@ A Prometheus exporter for Redfish BMC/iDRAC/iLO endpoints. Follows the **blackbo
 ```bash
 go build ./...                                    # build
 go test ./...                                     # unit tests only (no Docker needed)
-go test -tags=integration ./...                   # all tests including integration (requires Docker)
+DOCKER_HOST="unix:///run/user/1000/podman/podman.sock" TESTCONTAINERS_RYUK_DISABLED=true \
+  go test -tags=integration ./...                   # integration tests (Podman, rootless)
 go test -tags=integration -run TestRedfishCollector ./internal/collectors/
 go run main.go --config.file config.yaml          # run locally
 ```
