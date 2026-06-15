@@ -133,36 +133,48 @@ func (c *PowerCollector) Collect(ch chan<- prometheus.Metric) {
 		}
 
 		for _, pc := range power.PowerControl {
-			ch <- prometheus.MustNewConstMetric(
-				c.powerCapacityDesc,
-				prometheus.GaugeValue,
-				float64(*pc.PowerCapacityWatts),
-				chassis.ID, pc.Name, pc.MemberID,
-			)
-			ch <- prometheus.MustNewConstMetric(
-				c.powerConsumedDesc,
-				prometheus.GaugeValue,
-				float64(*pc.PowerConsumedWatts),
-				chassis.ID, pc.Name, pc.MemberID,
-			)
-			ch <- prometheus.MustNewConstMetric(
-				c.powerAverageConsumedDesc,
-				prometheus.GaugeValue,
-				float64(*pc.PowerMetrics.AverageConsumedWatts),
-				chassis.ID, pc.Name, pc.MemberID,
-			)
-			ch <- prometheus.MustNewConstMetric(
-				c.powerMaxConsumedDesc,
-				prometheus.GaugeValue,
-				float64(*pc.PowerMetrics.MaxConsumedWatts),
-				chassis.ID, pc.Name, pc.MemberID,
-			)
-			ch <- prometheus.MustNewConstMetric(
-				c.powerMinConsumedDesc,
-				prometheus.GaugeValue,
-				float64(*pc.PowerMetrics.MinConsumedWatts),
-				chassis.ID, pc.Name, pc.MemberID,
-			)
+			if pc.PowerCapacityWatts != nil {
+				ch <- prometheus.MustNewConstMetric(
+					c.powerCapacityDesc,
+					prometheus.GaugeValue,
+					float64(*pc.PowerCapacityWatts),
+					chassis.ID, pc.Name, pc.MemberID,
+				)
+			}
+			if pc.PowerConsumedWatts != nil {
+				ch <- prometheus.MustNewConstMetric(
+					c.powerConsumedDesc,
+					prometheus.GaugeValue,
+					float64(*pc.PowerConsumedWatts),
+					chassis.ID, pc.Name, pc.MemberID,
+				)
+			}
+			if pc.PowerMetrics != nil {
+				if pc.PowerMetrics.AverageConsumedWatts != nil {
+					ch <- prometheus.MustNewConstMetric(
+						c.powerAverageConsumedDesc,
+						prometheus.GaugeValue,
+						float64(*pc.PowerMetrics.AverageConsumedWatts),
+						chassis.ID, pc.Name, pc.MemberID,
+					)
+				}
+				if pc.PowerMetrics.MaxConsumedWatts != nil {
+					ch <- prometheus.MustNewConstMetric(
+						c.powerMaxConsumedDesc,
+						prometheus.GaugeValue,
+						float64(*pc.PowerMetrics.MaxConsumedWatts),
+						chassis.ID, pc.Name, pc.MemberID,
+					)
+				}
+				if pc.PowerMetrics.MinConsumedWatts != nil {
+					ch <- prometheus.MustNewConstMetric(
+						c.powerMinConsumedDesc,
+						prometheus.GaugeValue,
+						float64(*pc.PowerMetrics.MinConsumedWatts),
+						chassis.ID, pc.Name, pc.MemberID,
+					)
+				}
+			}
 		}
 
 		for _, redundancy := range power.Redundancy {

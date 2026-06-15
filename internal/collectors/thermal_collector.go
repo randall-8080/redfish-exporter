@@ -80,16 +80,23 @@ func (c *ThermalCollector) Collect(ch chan<- prometheus.Metric) {
 			if t.Status.State == common.DisabledState {
 				continue
 			}
+			if t.ReadingCelsius == nil {
+				continue
+			}
+			physicalContext := ""
+			if t.PhysicalContext != nil {
+				physicalContext = string(*t.PhysicalContext)
+			}
 			ch <- prometheus.MustNewConstMetric(
 				c.tempDesc,
 				prometheus.GaugeValue,
 				float64(*t.ReadingCelsius),
-				chassis.ID, t.Name, string(*t.PhysicalContext),
+				chassis.ID, t.Name, physicalContext,
 			)
 
 			// Export temperature status as a one-hot metric (1=OK, 0=not OK)
 			if t.Status.State == common.EnabledState {
-				statusValue := 0.0 // all non -OK statuses
+				statusValue := 0.0 // all non-OK statuses
 				if t.Status.Health == common.OKHealth {
 					statusValue = 1.0
 				}
@@ -97,7 +104,7 @@ func (c *ThermalCollector) Collect(ch chan<- prometheus.Metric) {
 					c.tempStatusDesc,
 					prometheus.GaugeValue,
 					statusValue,
-					chassis.ID, t.Name, string(*t.PhysicalContext), string(t.Status.Health),
+					chassis.ID, t.Name, physicalContext, string(t.Status.Health),
 				)
 			}
 		}
@@ -113,14 +120,21 @@ func (c *ThermalCollector) Collect(ch chan<- prometheus.Metric) {
 			if f.Name == "" {
 				continue
 			}
+			if f.Reading == nil {
+				continue
+			}
+			physicalContext := ""
+			if f.PhysicalContext != nil {
+				physicalContext = string(*f.PhysicalContext)
+			}
 			ch <- prometheus.MustNewConstMetric(
 				c.fanDesc,
 				prometheus.GaugeValue,
 				float64(*f.Reading),
-				chassis.ID, f.Name, string(*f.PhysicalContext), string(f.ReadingUnits),
+				chassis.ID, f.Name, physicalContext, string(f.ReadingUnits),
 			)
 			if f.Status.State == common.EnabledState {
-				statusValue := 0.0 // all non -OK statuses
+				statusValue := 0.0 // all non-OK statuses
 				if f.Status.Health == common.OKHealth {
 					statusValue = 1.0
 				}
@@ -128,7 +142,7 @@ func (c *ThermalCollector) Collect(ch chan<- prometheus.Metric) {
 					c.fanStatusDesc,
 					prometheus.GaugeValue,
 					statusValue,
-					chassis.ID, f.Name, string(*f.PhysicalContext), string(f.Status.Health),
+					chassis.ID, f.Name, physicalContext, string(f.Status.Health),
 				)
 			}
 		}
