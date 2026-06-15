@@ -35,8 +35,8 @@ func NewThermalCollector(target string, client *gofish.APIClient, logger *slog.L
 			append(thermalBaseLabels, "sensor", "physical_context"), prometheus.Labels{"target": target},
 		),
 		tempStatusDesc: prometheus.NewDesc(
-			prometheus.BuildFQName("redfish", "temperature", "status"),
-			"Redfish thermal temperature status health report (1=OK, 0=not OK)",
+			prometheus.BuildFQName("redfish", "temperature", "health"),
+			"Redfish thermal temperature health (1=OK, 0=not OK)",
 			append(thermalBaseLabels, "sensor", "physical_context", "health"), prometheus.Labels{"target": target},
 		),
 		fanDesc: prometheus.NewDesc(
@@ -45,8 +45,8 @@ func NewThermalCollector(target string, client *gofish.APIClient, logger *slog.L
 			append(thermalBaseLabels, "fan", "physical_context", "unit"), prometheus.Labels{"target": target},
 		),
 		fanStatusDesc: prometheus.NewDesc(
-			prometheus.BuildFQName("redfish", "fan", "status"),
-			"Redfish thermal fan status health report (1=OK, 0=not OK)",
+			prometheus.BuildFQName("redfish", "fan", "health"),
+			"Redfish thermal fan health (1=OK, 0=not OK)",
 			append(thermalBaseLabels, "fan", "physical_context", "health"), prometheus.Labels{"target": target},
 		),
 	}
@@ -74,6 +74,9 @@ func (c *ThermalCollector) Collect(ch chan<- prometheus.Metric) {
 			c.logger.Error("failed to get thermal data", "error", err, "chassis", chassis.ID, "target", c.target)
 			continue
 		}
+		if thermal == nil {
+			continue
+		}
 		// Export temperature readings and status
 		for _, t := range thermal.Temperatures {
 			// Skip disabled sensors
@@ -96,14 +99,10 @@ func (c *ThermalCollector) Collect(ch chan<- prometheus.Metric) {
 
 			// Export temperature status as a one-hot metric (1=OK, 0=not OK)
 			if t.Status.State == common.EnabledState {
-				statusValue := 0.0 // all non-OK statuses
-				if t.Status.Health == common.OKHealth {
-					statusValue = 1.0
-				}
 				ch <- prometheus.MustNewConstMetric(
 					c.tempStatusDesc,
 					prometheus.GaugeValue,
-					statusValue,
+					healthToFloat(t.Status.Health),
 					chassis.ID, t.Name, physicalContext, string(t.Status.Health),
 				)
 			}
@@ -134,14 +133,10 @@ func (c *ThermalCollector) Collect(ch chan<- prometheus.Metric) {
 				chassis.ID, f.Name, physicalContext, string(f.ReadingUnits),
 			)
 			if f.Status.State == common.EnabledState {
-				statusValue := 0.0 // all non-OK statuses
-				if f.Status.Health == common.OKHealth {
-					statusValue = 1.0
-				}
 				ch <- prometheus.MustNewConstMetric(
 					c.fanStatusDesc,
 					prometheus.GaugeValue,
-					statusValue,
+					healthToFloat(f.Status.Health),
 					chassis.ID, f.Name, physicalContext, string(f.Status.Health),
 				)
 			}

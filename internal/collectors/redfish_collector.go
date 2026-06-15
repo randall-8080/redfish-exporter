@@ -1,13 +1,15 @@
 package collectors
 
 import (
+	"context"
 	"log/slog"
 	"sync"
 	"time"
 
-	"github.com/e-breuninger/redfish-exporter/internal/config"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stmcginnis/gofish"
+
+	"github.com/e-breuninger/redfish-exporter/internal/config"
 )
 
 type namedCollector struct {
@@ -17,12 +19,13 @@ type namedCollector struct {
 
 type RedfishCollector struct {
 	target string
+	ctx    context.Context
 	subs   []namedCollector
 
 	durationDesc *prometheus.Desc
 }
 
-func NewRedfishCollector(target string, client *gofish.APIClient, logger *slog.Logger, cc config.CollectorsConfig) *RedfishCollector {
+func NewRedfishCollector(ctx context.Context, target string, client *gofish.APIClient, logger *slog.Logger, cc config.CollectorsConfig) *RedfishCollector {
 	var subs []namedCollector
 	if cc.Thermal {
 		subs = append(subs, namedCollector{"thermal", NewThermalCollector(target, client, logger)})
@@ -39,6 +42,7 @@ func NewRedfishCollector(target string, client *gofish.APIClient, logger *slog.L
 
 	return &RedfishCollector{
 		target: target,
+		ctx:    ctx,
 		subs:   subs,
 		durationDesc: prometheus.NewDesc(
 			"redfish_exporter_collector_duration_seconds",
@@ -61,24 +65,49 @@ func (c *RedfishCollector) Describe(ch chan<- *prometheus.Desc) {
 
 // Collect is called by the Prometheus registry when collecting metrics.
 func (c *RedfishCollector) Collect(ch chan<- prometheus.Metric) {
-	var wg sync.WaitGroup
-	wg.Add(len(c.subs))
+	// Use an intermediate channel so we can stop forwarding to ch when the
+	// request context is canceled without racing with prometheus closing ch.
+	inner := make(chan prometheus.Metric)
 
-	// Collect metrics from each sub-collector in parallel.
-	for _, sc := range c.subs {
-		go func() {
-			defer wg.Done()
-			start := time.Now()
-			sc.c.Collect(ch)
-			// Record the duration of the scrape.
-			ch <- prometheus.MustNewConstMetric(
-				c.durationDesc,
-				prometheus.GaugeValue,
-				time.Since(start).Seconds(),
-				c.target,
-				sc.name,
-			)
-		}()
+	go func() {
+		defer close(inner)
+		var wg sync.WaitGroup
+		wg.Add(len(c.subs))
+
+		// Collect metrics from each sub-collector in parallel.
+		for _, sc := range c.subs {
+			go func() {
+				defer wg.Done()
+				start := time.Now()
+				sc.c.Collect(inner)
+				// Record the duration of the scrape.
+				inner <- prometheus.MustNewConstMetric(
+					c.durationDesc,
+					prometheus.GaugeValue,
+					time.Since(start).Seconds(),
+					c.target,
+					sc.name,
+				)
+			}()
+		}
+		wg.Wait()
+	}()
+
+	// Forward metrics to ch until all sub-collectors finish or the request is canceled.
+	for {
+		select {
+		case m, ok := <-inner:
+			if !ok {
+				return
+			}
+			ch <- m
+		case <-c.ctx.Done():
+			// Drain inner in the background so sub-collector goroutines can exit cleanly.
+			go func() {
+				for range inner { //nolint:revive // intentional drain: unblocks sub-collector goroutines on cancel
+				}
+			}()
+			return
+		}
 	}
-	wg.Wait()
 }

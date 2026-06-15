@@ -35,7 +35,7 @@ modules:
 ### Prometheus Configuration
 
 ```yaml
-scrape_configs:    
+scrape_configs:
   - job_name: 'redfish_default'
     metrics_path: /probe
     params:
@@ -49,7 +49,7 @@ scrape_configs:
       - source_labels: [__param_target]
         target_label: instance
       - target_label: __address__
-        replacement: redfish_exporter:9042  # Redfish Exporter address 
+        replacement: redfish_exporter:9042  # Redfish Exporter address
 ```
 
 ## Metrics
@@ -58,38 +58,86 @@ scrape_configs:
 
 Redfish reports component health as an enum: `OK`, `Warning`, or `Critical`. This exporter maps those values to floats in two patterns depending on the metric:
 
-**Three-valued** — used where `Warning` is a distinct, actionable state (power redundancy, power supplies):
+All health metrics use binary encoding: `1=OK`, `0=not OK`. Every health metric carries a `health` label with the raw Redfish string (`OK`, `Warning`, `Critical`), so severity is still queryable:
 
 | Redfish Health | Value |
 |---|---|
 | OK | 1.0 |
-| Warning | 0.5 |
+| Warning | 0.0 |
 | Critical | 0.0 |
 
-**Binary** — used for sensors where any non-OK state should alert (temperatures, fans, memory, system rollup):
-
-| Redfish Health | Value |
-|---|---|
-| OK | 1.0 |
-| Warning / Critical | 0.0 |
-
-Binary health metrics also carry a `health` label with the raw Redfish string (`OK`, `Warning`, `Critical`), so the actual severity is still queryable even though the value is 0 for both non-OK states:
+Simple alerting catches any unhealthy state:
 
 ```promql
-redfish_temperature_status{health="Warning"} == 0
-redfish_temperature_status{health="Critical"} == 0
+redfish_temperature_health == 0
 ```
+
+Severity filtering:
+
+```promql
+redfish_temperature_health{health="Critical"} == 0
+redfish_temperature_health{health="Warning"} == 0
+```
+
+### Collectors
+
+Each collector is enabled per-module in the config under `collectors:`.
+
+**Power** (`collectors.power: true`) — reads `Chassis[*].Power`
+
+Tracks chassis power state, per-control-zone capacity and consumption (current, average, min, max), redundancy group health, and individual PSU health.
+
+| Metric | Description |
+|---|---|
+| `redfish_power_state` | Chassis power state (1=On, 0=Off) |
+| `redfish_power_capacity_watts` | Max power capacity per control zone |
+| `redfish_power_consumed_watts` | Current power consumption per control zone |
+| `redfish_power_average_consumed_watts` | Average power consumption per control zone |
+| `redfish_power_max_consumed_watts` | Peak power consumption per control zone |
+| `redfish_power_min_consumed_watts` | Minimum power consumption per control zone |
+| `redfish_power_redundancy_health` | Power redundancy group health (three-valued) |
+| `redfish_power_supply_health` | Individual PSU health (three-valued) |
+
+**Thermal** (`collectors.thermal: true`) — reads `Chassis[*].Thermal`
+
+Tracks per-sensor temperature readings and health, and per-fan speed and health. Disabled sensors and absent or unnamed fans are skipped.
+
+| Metric | Description |
+|---|---|
+| `redfish_temperature_celsius` | Temperature reading in Celsius |
+| `redfish_temperature_health` | Temperature sensor health (binary) |
+| `redfish_fan_rpm` | Fan speed in RPM |
+| `redfish_fan_health` | Fan health (binary) |
+
+**Systems** (`collectors.systems: true`) — reads `Systems[*]`
+
+Emits a metadata info metric and overall health rollup per system.
+
+| Metric | Description |
+|---|---|
+| `redfish_system_info` | System identity info (serial, manufacturer, model); always 1 |
+| `redfish_system_health_rollup` | Overall system health rollup (binary) |
+
+**Memory** (`collectors.memory: true`) — reads `Systems[*].Memory[*]`
+
+Tracks capacity and health per DIMM slot. Absent and disabled modules are skipped entirely. Modules in `StandbySpare` state emit capacity but no status metric.
+
+| Metric | Description |
+|---|---|
+| `redfish_memory_capacity_mib` | DIMM capacity in MiB |
+| `redfish_memory_health` | DIMM health (binary) |
 
 ### Metric reference
 
 | Metric | Health encoding | Labels |
 |---|---|---|
-| `redfish_system_status_health_rollup` | binary | `target`, `system_id` |
-| `redfish_temperature_status` | binary | `target`, `chassis_id`, `sensor`, `physical_context`, `health` |
-| `redfish_fan_status` | binary | `target`, `chassis_id`, `fan`, `physical_context`, `health` |
-| `redfish_memory_status` | binary | `target`, `system_id`, `memory_id`, `memory_location`, `health` |
-| `redfish_power_redundancy_health` | three-valued | `target`, `chassis_id`, `name`, `member_id` |
-| `redfish_power_supplies_health` | three-valued | `target`, `chassis_id`, `name`, `member_id` |
+| `redfish_system_info` | — | `target`, `system_id`, `serial_number`, `manufacturer`, `model` |
+| `redfish_system_health_rollup` | binary | `target`, `system_id`, `health` |
+| `redfish_temperature_health` | binary | `target`, `chassis_id`, `sensor`, `physical_context`, `health` |
+| `redfish_fan_health` | binary | `target`, `chassis_id`, `fan`, `physical_context`, `health` |
+| `redfish_memory_health` | binary | `target`, `system_id`, `memory_id`, `memory_location`, `health` |
+| `redfish_power_redundancy_health` | binary | `target`, `chassis_id`, `name`, `member_id`, `health` |
+| `redfish_power_supply_health` | binary | `target`, `chassis_id`, `name`, `member_id`, `health` |
 
 Disabled or absent components are skipped entirely — they produce no metric rather than a zero value.
 

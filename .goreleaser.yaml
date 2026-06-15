@@ -1,0 +1,115 @@
+version: 2
+
+project_name: redfish_exporter
+
+builds:
+  - id: redfish_exporter
+    main: .
+    binary: redfish_exporter
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w
+      - -X github.com/prometheus/common/version.Version={{.Version}}
+      - -X github.com/prometheus/common/version.Revision={{.FullCommit}}
+      - -X github.com/prometheus/common/version.Branch={{.Branch}}
+      - -X github.com/prometheus/common/version.BuildDate={{.Date}}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+      - arm
+    goarm:
+      - "7"
+    ignore:
+      - goos: darwin
+        goarch: arm
+      - goos: windows
+        goarch: arm
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+
+checksum:
+  name_template: checksums.txt
+
+dockers:
+  - id: linux-amd64
+    ids: [redfish_exporter]
+    goarch: amd64
+    use: buildx
+    dockerfile: Containerfile
+    image_templates:
+      - "ghcr.io/e-breuninger/redfish-exporter:{{ .Tag }}-amd64"
+    build_flag_templates:
+      - "--target=goreleaser"
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.source=https://github.com/e-breuninger/redfish-exporter"
+
+  - id: linux-arm64
+    ids: [redfish_exporter]
+    goarch: arm64
+    use: buildx
+    dockerfile: Containerfile
+    image_templates:
+      - "ghcr.io/e-breuninger/redfish-exporter:{{ .Tag }}-arm64"
+    build_flag_templates:
+      - "--target=goreleaser"
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.source=https://github.com/e-breuninger/redfish-exporter"
+
+  - id: linux-armv7
+    ids: [redfish_exporter]
+    goarch: arm
+    goarm: "7"
+    use: buildx
+    dockerfile: Containerfile
+    image_templates:
+      - "ghcr.io/e-breuninger/redfish-exporter:{{ .Tag }}-armv7"
+    build_flag_templates:
+      - "--target=goreleaser"
+      - "--platform=linux/arm/v7"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.source=https://github.com/e-breuninger/redfish-exporter"
+
+docker_manifests:
+  - name_template: "ghcr.io/e-breuninger/redfish-exporter:{{ .Tag }}"
+    image_templates:
+      - "ghcr.io/e-breuninger/redfish-exporter:{{ .Tag }}-amd64"
+      - "ghcr.io/e-breuninger/redfish-exporter:{{ .Tag }}-arm64"
+      - "ghcr.io/e-breuninger/redfish-exporter:{{ .Tag }}-armv7"
+
+  - name_template: "ghcr.io/e-breuninger/redfish-exporter:latest"
+    image_templates:
+      - "ghcr.io/e-breuninger/redfish-exporter:{{ .Tag }}-amd64"
+      - "ghcr.io/e-breuninger/redfish-exporter:{{ .Tag }}-arm64"
+      - "ghcr.io/e-breuninger/redfish-exporter:{{ .Tag }}-armv7"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"

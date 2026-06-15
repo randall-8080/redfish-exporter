@@ -122,7 +122,7 @@ func probeHandler(w http.ResponseWriter, r *http.Request, logger *slog.Logger, c
 
 	// Create registry for probe internal metrics
 	registry := prometheus.NewPedanticRegistry()
-	registry.MustRegister(collectors.NewRedfishCollector(target, client, logger, config.Modules[module].Collectors))
+	registry.MustRegister(collectors.NewRedfishCollector(ctx, target, client, logger, config.Modules[module].Collectors))
 
 	// Serve metrics
 	h := promhttp.HandlerFor(registry, promhttp.HandlerOpts{})

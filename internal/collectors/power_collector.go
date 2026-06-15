@@ -5,7 +5,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stmcginnis/gofish"
-	"github.com/stmcginnis/gofish/common"
 	"github.com/stmcginnis/gofish/redfish"
 )
 
@@ -57,36 +56,36 @@ func NewPowerCollector(target string, client *gofish.APIClient, logger *slog.Log
 		),
 		// PowerAverageConsumedWatts
 		powerAverageConsumedDesc: prometheus.NewDesc(
-			prometheus.BuildFQName("redfish", "power_metrics", "average_consumed_watts"),
+			prometheus.BuildFQName("redfish", "power", "average_consumed_watts"),
 			"Power average consumed of the chassis in Watts",
 			append(powerBaseLabels, "name", "member_id"),
 			prometheus.Labels{"target": target},
 		),
 		// PowerMaxConsumedWatts
 		powerMaxConsumedDesc: prometheus.NewDesc(
-			prometheus.BuildFQName("redfish", "power_metrics", "max_consumed_watts"),
+			prometheus.BuildFQName("redfish", "power", "max_consumed_watts"),
 			"Power max consumed of the chassis in Watts",
 			append(powerBaseLabels, "name", "member_id"),
 			prometheus.Labels{"target": target},
 		),
 		// PowerMinConsumedWatts
 		powerMinConsumedDesc: prometheus.NewDesc(
-			prometheus.BuildFQName("redfish", "power_metrics", "min_consumed_watts"),
+			prometheus.BuildFQName("redfish", "power", "min_consumed_watts"),
 			"Power min consumed of the chassis in Watts",
 			append(powerBaseLabels, "name", "member_id"),
 			prometheus.Labels{"target": target},
 		),
 		powerRedundancyHealthDesc: prometheus.NewDesc(
-			prometheus.BuildFQName("redfish", "power_redundancy", "health"),
-			"Health status of the power redundancy subsystem",
-			append(powerBaseLabels, "name", "member_id"),
+			prometheus.BuildFQName("redfish", "power", "redundancy_health"),
+			"Health status of the power redundancy subsystem (1=OK, 0=not OK)",
+			append(powerBaseLabels, "name", "member_id", "health"),
 			prometheus.Labels{"target": target},
 		),
 		// PowerSuppliesHealth
 		powerSuppliesHealthDesc: prometheus.NewDesc(
-			prometheus.BuildFQName("redfish", "power_supplies", "health"),
-			"Health status of the power suppliy device",
-			append(powerBaseLabels, "name", "member_id"),
+			prometheus.BuildFQName("redfish", "power", "supply_health"),
+			"Health status of a power supply (1=OK, 0=not OK)",
+			append(powerBaseLabels, "name", "member_id", "health"),
 			prometheus.Labels{"target": target},
 		),
 	}
@@ -178,40 +177,20 @@ func (c *PowerCollector) Collect(ch chan<- prometheus.Metric) {
 		}
 
 		for _, redundancy := range power.Redundancy {
-			// Todo: Is there a better way to convert Health to a numeric value?
-			healthValue := 0.0
-			switch redundancy.Status.Health {
-			case common.OKHealth:
-				healthValue = 1.0
-			case common.WarningHealth:
-				healthValue = 0.5
-			case common.CriticalHealth:
-				healthValue = 0.0
-			}
 			ch <- prometheus.MustNewConstMetric(
 				c.powerRedundancyHealthDesc,
 				prometheus.GaugeValue,
-				healthValue,
-				chassis.ID, redundancy.Name, redundancy.MemberID,
+				healthToFloat(redundancy.Status.Health),
+				chassis.ID, redundancy.Name, redundancy.MemberID, string(redundancy.Status.Health),
 			)
 		}
 
 		for _, ps := range power.PowerSupplies {
-			// Todo: Is there a better way to convert Health to a numeric value?
-			healthValue := 0.0
-			switch ps.Status.Health {
-			case common.OKHealth:
-				healthValue = 1.0
-			case common.WarningHealth:
-				healthValue = 0.5
-			case common.CriticalHealth:
-				healthValue = 0.0
-			}
 			ch <- prometheus.MustNewConstMetric(
 				c.powerSuppliesHealthDesc,
 				prometheus.GaugeValue,
-				healthValue,
-				chassis.ID, ps.Name, ps.MemberID,
+				healthToFloat(ps.Status.Health),
+				chassis.ID, ps.Name, ps.MemberID, string(ps.Status.Health),
 			)
 		}
 

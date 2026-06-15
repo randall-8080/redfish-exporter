@@ -33,8 +33,8 @@ func NewMemoryCollector(target string, client *gofish.APIClient, logger *slog.Lo
 			prometheus.Labels{"target": target},
 		),
 		memoryStatusDesc: prometheus.NewDesc(
-			prometheus.BuildFQName("redfish", "memory", "status"),
-			"Memory module health status (1=OK, 0=not OK)",
+			prometheus.BuildFQName("redfish", "memory", "health"),
+			"Memory module health (1=OK, 0=not OK)",
 			append(memoryBaseLabels, "health"),
 			prometheus.Labels{"target": target},
 		),
@@ -84,14 +84,10 @@ func (c *MemoryCollector) Collect(ch chan<- prometheus.Metric) {
 
 			// Export health status metric
 			if mem.Status.State == common.EnabledState {
-				statusValue := 0.0
-				if mem.Status.Health == common.OKHealth {
-					statusValue = 1.0
-				}
 				ch <- prometheus.MustNewConstMetric(
 					c.memoryStatusDesc,
 					prometheus.GaugeValue,
-					statusValue,
+					healthToFloat(mem.Status.Health),
 					system.ID, mem.ID, memLocation, string(mem.Status.Health),
 				)
 			}

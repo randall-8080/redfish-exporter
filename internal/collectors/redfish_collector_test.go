@@ -62,7 +62,7 @@ func TestRedfishCollectorIntegration(t *testing.T) {
 	require.NoError(t, err, "failed to create Redfish client")
 
 	// Create collector
-	collector := NewRedfishCollector(target, client, &slog.Logger{}, config.Modules["default"].Collectors)
+	collector := NewRedfishCollector(ctx, target, client, &slog.Logger{}, config.Modules["default"].Collectors)
 
 	// Create registry and register collector
 	registry := prometheus.NewRegistry()

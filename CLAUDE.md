@@ -78,6 +78,15 @@ modules:
 
 A `default` module is required; the server rejects requests for unknown module names.
 
+## Testing Requirements
+
+Every new feature or collector must be covered by **both** a unit test and an integration test:
+
+- **Unit tests** — table-driven, `_test.go` next to the source file, no external dependencies.
+- **Integration tests** — in the same `_test.go` file, tagged with `//go:build integration`, using `testcontainers-go` to spin up `dmtf/redfish-mockup-server:latest`. Test against the real mockup server; do not mock the Redfish HTTP layer.
+
+A collector added without both test types will not be accepted.
+
 ## Integration Tests
 
 `internal/collectors/redfish_collector_test.go` uses `testcontainers-go` to spin up `dmtf/redfish-mockup-server:latest`. Tests run as part of `go test ./...` and **require Docker**. There is currently no build tag to skip them without Docker.

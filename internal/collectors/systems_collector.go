@@ -5,7 +5,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stmcginnis/gofish"
-	"github.com/stmcginnis/gofish/common"
 )
 
 type SystemsCollector struct {
@@ -14,7 +13,7 @@ type SystemsCollector struct {
 	logger *slog.Logger
 
 	// descriptors
-	systemMetadataDesc           *prometheus.Desc
+	systemInfoDesc               *prometheus.Desc
 	systemStatusHealthRollupDesc *prometheus.Desc
 }
 
@@ -28,16 +27,16 @@ func NewSystemsCollector(target string, client *gofish.APIClient, logger *slog.L
 		target: target,
 		client: client,
 		logger: logger,
-		systemMetadataDesc: prometheus.NewDesc(
-			prometheus.BuildFQName("redfish", "system", "metadata"),
-			"Metadata information about the system (always 1)",
+		systemInfoDesc: prometheus.NewDesc(
+			prometheus.BuildFQName("redfish", "system", "info"),
+			"System identity info metric (always 1)",
 			append(systemBaseLabels, "serial_number", "manufacturer", "model"),
 			prometheus.Labels{"target": target},
 		),
 		systemStatusHealthRollupDesc: prometheus.NewDesc(
-			prometheus.BuildFQName("redfish", "system", "status_health_rollup"),
-			"Overall combined health status of the system (1=OK, 0=Critical)",
-			systemBaseLabels,
+			prometheus.BuildFQName("redfish", "system", "health_rollup"),
+			"Overall combined health of the system including sub-components (1=OK, 0=not OK)",
+			append(systemBaseLabels, "health"),
 			prometheus.Labels{"target": target},
 		),
 	}
@@ -46,7 +45,7 @@ func NewSystemsCollector(target string, client *gofish.APIClient, logger *slog.L
 // Describe sends the super-set of all possible descriptors of metrics
 // collected by this Collector.
 func (c *SystemsCollector) Describe(ch chan<- *prometheus.Desc) {
-	ch <- c.systemMetadataDesc
+	ch <- c.systemInfoDesc
 	ch <- c.systemStatusHealthRollupDesc
 }
 
@@ -59,9 +58,9 @@ func (c *SystemsCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 	for _, system := range systems {
 
-		// Set metadata metric
+		// Set identity info metric
 		ch <- prometheus.MustNewConstMetric(
-			c.systemMetadataDesc,
+			c.systemInfoDesc,
 			prometheus.GaugeValue,
 			1,
 			system.ID,
@@ -71,16 +70,11 @@ func (c *SystemsCollector) Collect(ch chan<- prometheus.Metric) {
 		)
 
 		// Set the overall health rollup metric
-		healthValue := float64(0)
-		if system.Status.HealthRollup == common.OKHealth {
-			healthValue = 1
-		}
-
 		ch <- prometheus.MustNewConstMetric(
 			c.systemStatusHealthRollupDesc,
 			prometheus.GaugeValue,
-			healthValue,
-			system.ID,
+			healthToFloat(system.Status.HealthRollup),
+			system.ID, string(system.Status.HealthRollup),
 		)
 	}
 }
