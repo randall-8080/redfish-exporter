@@ -1,11 +1,9 @@
 package collectors
 
 import (
-	"context"
 	"io"
 	"log/slog"
 	"testing"
-	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
@@ -15,10 +13,8 @@ import (
 )
 
 // stubCollector is a prometheus.Collector that emits a single constant metric.
-// If releaseC is set, Collect blocks until the channel is closed.
 type stubCollector struct {
-	desc     *prometheus.Desc
-	releaseC chan struct{}
+	desc *prometheus.Desc
 }
 
 func newStubCollector(name string) *stubCollector {
@@ -30,18 +26,14 @@ func newStubCollector(name string) *stubCollector {
 func (s *stubCollector) Describe(ch chan<- *prometheus.Desc) { ch <- s.desc }
 
 func (s *stubCollector) Collect(ch chan<- prometheus.Metric) {
-	if s.releaseC != nil {
-		<-s.releaseC
-	}
 	ch <- prometheus.MustNewConstMetric(s.desc, prometheus.GaugeValue, 1.0)
 }
 
 // makeTestRedfishCollector builds a RedfishCollector with pre-built sub-collectors,
 // bypassing the gofish client dependency for unit testing.
-func makeTestRedfishCollector(ctx context.Context, target string, subs []namedCollector) *RedfishCollector {
+func makeTestRedfishCollector(target string, subs []namedCollector) *RedfishCollector {
 	return &RedfishCollector{
 		target: target,
-		done:   ctx.Done(),
 		subs:   subs,
 		durationDesc: prometheus.NewDesc(
 			"redfish_exporter_collector_duration_seconds",
@@ -72,7 +64,7 @@ func TestNewRedfishCollector_SubCollectorSelection(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// nil client is safe here — sub-collectors only store it, never call it during construction.
-			c := NewRedfishCollector(context.Background(), "http://bmc.example.com", nil, discardLogger(), tt.cfg)
+			c := NewRedfishCollector("http://bmc.example.com", nil, discardLogger(), tt.cfg)
 			assert.Len(t, c.subs, tt.wantSubs)
 		})
 	}
@@ -83,7 +75,7 @@ func TestRedfishCollector_Describe_SendsSubAndDurationDescriptors(t *testing.T) 
 		{"thermal", newStubCollector("test_describe_thermal")},
 		{"power", newStubCollector("test_describe_power")},
 	}
-	c := makeTestRedfishCollector(context.Background(), "target", subs)
+	c := makeTestRedfishCollector("target", subs)
 
 	ch := make(chan *prometheus.Desc, 10)
 	c.Describe(ch)
@@ -102,39 +94,8 @@ func TestRedfishCollector_Collect_EmitsDurationPerSubCollector(t *testing.T) {
 		{"thermal", newStubCollector("test_collect_duration_thermal")},
 		{"power", newStubCollector("test_collect_duration_power")},
 	}
-	c := makeTestRedfishCollector(context.Background(), "test-target", subs)
+	c := makeTestRedfishCollector("test-target", subs)
 
 	// 1 stub metric per sub-collector (2) + 1 duration metric per sub-collector (2) = 4
 	assert.Equal(t, 4, testutil.CollectAndCount(c))
-}
-
-func TestRedfishCollector_Collect_ContextCancellation(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-
-	releaseC := make(chan struct{})
-	subs := []namedCollector{
-		{"blocking", &stubCollector{
-			desc:     prometheus.NewDesc("test_cancel_blocking_stub", "blocking stub", nil, nil),
-			releaseC: releaseC,
-		}},
-	}
-	c := makeTestRedfishCollector(ctx, "target", subs)
-
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		ch := make(chan prometheus.Metric, 100)
-		c.Collect(ch)
-	}()
-
-	cancel()
-
-	select {
-	case <-done:
-		// Collect returned after context cancellation — correct
-	case <-time.After(time.Second):
-		t.Fatal("Collect did not return within 1s after context cancellation")
-	}
-
-	close(releaseC) // let the blocked sub-collector goroutine exit cleanly
 }

@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -89,10 +88,6 @@ func Run() {
 }
 
 func probeHandler(w http.ResponseWriter, r *http.Request, logger *slog.Logger, config *config.Config) {
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
-	r = r.WithContext(ctx)
-
 	module := r.URL.Query().Get("module")
 	if module == "" {
 		module = "default"
@@ -122,7 +117,7 @@ func probeHandler(w http.ResponseWriter, r *http.Request, logger *slog.Logger, c
 
 	// Create registry for probe internal metrics
 	registry := prometheus.NewPedanticRegistry()
-	registry.MustRegister(collectors.NewRedfishCollector(ctx, target, client, logger, config.Modules[module].Collectors))
+	registry.MustRegister(collectors.NewRedfishCollector(target, client, logger, config.Modules[module].Collectors))
 
 	// Serve metrics
 	h := promhttp.HandlerFor(registry, promhttp.HandlerOpts{})
