@@ -15,11 +15,14 @@ type PowerCollector struct {
 
 	// descriptors
 	powerStateDesc            *prometheus.Desc
+	chassisHealthDesc         *prometheus.Desc
+	chassisHealthRollupDesc   *prometheus.Desc
 	powerCapacityDesc         *prometheus.Desc
 	powerConsumedDesc         *prometheus.Desc
 	powerAverageConsumedDesc  *prometheus.Desc
 	powerMaxConsumedDesc      *prometheus.Desc
 	powerMinConsumedDesc      *prometheus.Desc
+	powerControlHealthDesc    *prometheus.Desc
 	powerRedundancyHealthDesc *prometheus.Desc
 	powerSuppliesHealthDesc   *prometheus.Desc
 }
@@ -39,6 +42,18 @@ func NewPowerCollector(target string, client *gofish.APIClient, logger *slog.Log
 			prometheus.BuildFQName("redfish", "power", "state"),
 			"Power state of the overall chassis (1=On, 0=Off)",
 			powerBaseLabels,
+			prometheus.Labels{"target": target},
+		),
+		chassisHealthDesc: prometheus.NewDesc(
+			prometheus.BuildFQName("redfish", "chassis", "health"),
+			"Health of the chassis (1=OK, 0=not OK)",
+			append(powerBaseLabels, "health"),
+			prometheus.Labels{"target": target},
+		),
+		chassisHealthRollupDesc: prometheus.NewDesc(
+			prometheus.BuildFQName("redfish", "chassis", "health_rollup"),
+			"Rollup health of the chassis including all subordinate resources (1=OK, 0=not OK)",
+			append(powerBaseLabels, "health"),
 			prometheus.Labels{"target": target},
 		),
 		// PowerCapacityWatts
@@ -75,6 +90,12 @@ func NewPowerCollector(target string, client *gofish.APIClient, logger *slog.Log
 			append(powerBaseLabels, "name", "member_id"),
 			prometheus.Labels{"target": target},
 		),
+		powerControlHealthDesc: prometheus.NewDesc(
+			prometheus.BuildFQName("redfish", "power", "control_health"),
+			"Health of a power control domain (1=OK, 0=not OK)",
+			append(powerBaseLabels, "name", "member_id", "health"),
+			prometheus.Labels{"target": target},
+		),
 		powerRedundancyHealthDesc: prometheus.NewDesc(
 			prometheus.BuildFQName("redfish", "power", "redundancy_health"),
 			"Health status of the power redundancy subsystem (1=OK, 0=not OK)",
@@ -94,11 +115,14 @@ func NewPowerCollector(target string, client *gofish.APIClient, logger *slog.Log
 // Describe sends the super-set of all possible descriptors of metrics collected by this Collector.
 func (c *PowerCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.powerStateDesc
+	ch <- c.chassisHealthDesc
+	ch <- c.chassisHealthRollupDesc
 	ch <- c.powerCapacityDesc
 	ch <- c.powerConsumedDesc
 	ch <- c.powerAverageConsumedDesc
 	ch <- c.powerMaxConsumedDesc
 	ch <- c.powerMinConsumedDesc
+	ch <- c.powerControlHealthDesc
 	ch <- c.powerRedundancyHealthDesc
 	ch <- c.powerSuppliesHealthDesc
 }
@@ -122,6 +146,22 @@ func (c *PowerCollector) Collect(ch chan<- prometheus.Metric) {
 			powerState,
 			chassis.ID,
 		)
+		if chassis.Status.Health != "" {
+			ch <- prometheus.MustNewConstMetric(
+				c.chassisHealthDesc,
+				prometheus.GaugeValue,
+				healthToFloat(chassis.Status.Health),
+				chassis.ID, string(chassis.Status.Health),
+			)
+		}
+		if chassis.Status.HealthRollup != "" {
+			ch <- prometheus.MustNewConstMetric(
+				c.chassisHealthRollupDesc,
+				prometheus.GaugeValue,
+				healthToFloat(chassis.Status.HealthRollup),
+				chassis.ID, string(chassis.Status.HealthRollup),
+			)
+		}
 
 		power, err := chassis.Power()
 		if err != nil || power == nil {
@@ -130,6 +170,14 @@ func (c *PowerCollector) Collect(ch chan<- prometheus.Metric) {
 		}
 
 		for _, pc := range power.PowerControl {
+			if pc.Status.Health != "" {
+				ch <- prometheus.MustNewConstMetric(
+					c.powerControlHealthDesc,
+					prometheus.GaugeValue,
+					healthToFloat(pc.Status.Health),
+					chassis.ID, pc.Name, pc.MemberID, string(pc.Status.Health),
+				)
+			}
 			if pc.PowerCapacityWatts != nil {
 				ch <- prometheus.MustNewConstMetric(
 					c.powerCapacityDesc,

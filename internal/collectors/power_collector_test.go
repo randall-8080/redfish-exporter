@@ -12,8 +12,9 @@ func TestPowerCollector_Collect_HappyPath(t *testing.T) {
 	defer srv.Close()
 	c := NewPowerCollector(srv.URL, newTestGoFishClient(t, srv.URL), discardLogger())
 
-	// powerState(1) + capacity(1) + consumed(1) + avg(1) + max(1) + min(1) + supply_health(1) = 7
-	assert.Equal(t, 7, testutil.CollectAndCount(c))
+	// powerState(1) + chassis_health(1) + chassis_health_rollup(1) + control_health(1) +
+	// capacity(1) + consumed(1) + avg(1) + max(1) + min(1) + supply_health(1) = 10
+	assert.Equal(t, 10, testutil.CollectAndCount(c))
 }
 
 func TestPowerCollector_Collect_SkipsNilOptionalFields(t *testing.T) {
@@ -28,8 +29,9 @@ func TestPowerCollector_Collect_SkipsNilOptionalFields(t *testing.T) {
 	defer srv.Close()
 	c := NewPowerCollector(srv.URL, newTestGoFishClient(t, srv.URL), discardLogger())
 
-	// powerState(1) + supply_health(1) = 2; capacity/consumed/metrics omitted (nil)
-	assert.Equal(t, 2, testutil.CollectAndCount(c))
+	// powerState(1) + chassis_health(1) + chassis_health_rollup(1) + supply_health(1) = 4;
+	// capacity/consumed/metrics omitted (nil); PowerControl has no Status → no control_health
+	assert.Equal(t, 4, testutil.CollectAndCount(c))
 }
 
 func TestPowerCollector_Collect_PowerStateOff(t *testing.T) {
@@ -45,8 +47,10 @@ func TestPowerCollector_Collect_PowerStateOff(t *testing.T) {
 	defer srv.Close()
 	c := NewPowerCollector(srv.URL, newTestGoFishClient(t, srv.URL), discardLogger())
 
-	// same metric count as happy path; powerState emits 0.0 for Off state
-	assert.Equal(t, 7, testutil.CollectAndCount(c))
+	// chassisItem override has no Status → no chassis health metrics;
+	// default power has PowerControl with Status → control_health(1)
+	// powerState(1) + control_health(1) + capacity(1) + consumed(1) + avg(1) + max(1) + min(1) + supply_health(1) = 8
+	assert.Equal(t, 8, testutil.CollectAndCount(c))
 }
 
 func TestPowerCollector_Collect_SupplyWarningHealth(t *testing.T) {
@@ -61,8 +65,8 @@ func TestPowerCollector_Collect_SupplyWarningHealth(t *testing.T) {
 	defer srv.Close()
 	c := NewPowerCollector(srv.URL, newTestGoFishClient(t, srv.URL), discardLogger())
 
-	// powerState(1) + supply_health(1, value=0.0 for Warning) = 2
-	assert.Equal(t, 2, testutil.CollectAndCount(c))
+	// powerState(1) + chassis_health(1) + chassis_health_rollup(1) + supply_health(1, value=0.0 for Warning) = 4
+	assert.Equal(t, 4, testutil.CollectAndCount(c))
 }
 
 func TestPowerCollector_Collect_SkipsUnnamedSupply(t *testing.T) {
@@ -80,8 +84,45 @@ func TestPowerCollector_Collect_SkipsUnnamedSupply(t *testing.T) {
 	defer srv.Close()
 	c := NewPowerCollector(srv.URL, newTestGoFishClient(t, srv.URL), discardLogger())
 
-	// both unnamed PSUs skipped; only powerState emitted — no panic from duplicate labels
-	assert.Equal(t, 1, testutil.CollectAndCount(c))
+	// both unnamed PSUs skipped; powerState(1) + chassis_health(1) + chassis_health_rollup(1) = 3
+	assert.Equal(t, 3, testutil.CollectAndCount(c))
+}
+
+func TestPowerCollector_Collect_ChassisHealthCritical(t *testing.T) {
+	r := defaultResponses()
+	r.chassisItem = `{
+		"@odata.id": "/redfish/v1/Chassis/1",
+		"Id": "1",
+		"PowerState": "On",
+		"Status": {"Health": "Critical", "HealthRollup": "Critical"},
+		"Power": {"@odata.id": "/redfish/v1/Chassis/1/Power"}
+	}`
+	r.power = `{
+		"@odata.id": "/redfish/v1/Chassis/1/Power",
+		"PowerControl": [], "Redundancy": [], "PowerSupplies": []
+	}`
+	srv := newTestServer(t, r)
+	defer srv.Close()
+	c := NewPowerCollector(srv.URL, newTestGoFishClient(t, srv.URL), discardLogger())
+
+	// powerState(1) + chassis_health(0) + chassis_health_rollup(0) = 3; values are 0.0 for Critical
+	assert.Equal(t, 3, testutil.CollectAndCount(c))
+}
+
+func TestPowerCollector_Collect_PowerControlHealthWarning(t *testing.T) {
+	r := defaultResponses()
+	r.power = `{
+		"@odata.id": "/redfish/v1/Chassis/1/Power",
+		"PowerControl": [{"MemberId": "0", "Name": "Sys", "Status": {"Health": "Warning", "State": "Enabled"}}],
+		"Redundancy": [],
+		"PowerSupplies": []
+	}`
+	srv := newTestServer(t, r)
+	defer srv.Close()
+	c := NewPowerCollector(srv.URL, newTestGoFishClient(t, srv.URL), discardLogger())
+
+	// powerState(1) + chassis_health(1) + chassis_health_rollup(1) + control_health(1, value=0.0) = 4
+	assert.Equal(t, 4, testutil.CollectAndCount(c))
 }
 
 func TestPowerCollector_Collect_SkipsUnnamedRedundancy(t *testing.T) {
@@ -99,6 +140,6 @@ func TestPowerCollector_Collect_SkipsUnnamedRedundancy(t *testing.T) {
 	defer srv.Close()
 	c := NewPowerCollector(srv.URL, newTestGoFishClient(t, srv.URL), discardLogger())
 
-	// both unnamed redundancy groups skipped — no panic from duplicate labels
-	assert.Equal(t, 1, testutil.CollectAndCount(c))
+	// both unnamed redundancy groups skipped; powerState(1) + chassis_health(1) + chassis_health_rollup(1) = 3
+	assert.Equal(t, 3, testutil.CollectAndCount(c))
 }

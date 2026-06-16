@@ -40,6 +40,7 @@ func defaultResponses() redfishResponses {
 			"@odata.id": "/redfish/v1/Chassis/1",
 			"Id": "1",
 			"PowerState": "On",
+			"Status": {"Health": "OK", "HealthRollup": "OK"},
 			"Power":   {"@odata.id": "/redfish/v1/Chassis/1/Power"},
 			"Thermal": {"@odata.id": "/redfish/v1/Chassis/1/Thermal"}
 		}`,
@@ -54,7 +55,8 @@ func defaultResponses() redfishResponses {
 					"AverageConsumedWatts": 200.0,
 					"MaxConsumedWatts": 300.0,
 					"MinConsumedWatts": 150.0
-				}
+				},
+				"Status": {"Health": "OK", "State": "Enabled"}
 			}],
 			"Redundancy": [],
 			"PowerSupplies": [{
