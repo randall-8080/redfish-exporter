@@ -14,6 +14,7 @@ type SystemsCollector struct {
 
 	// descriptors
 	systemInfoDesc               *prometheus.Desc
+	systemHealthDesc             *prometheus.Desc
 	systemStatusHealthRollupDesc *prometheus.Desc
 }
 
@@ -33,6 +34,12 @@ func NewSystemsCollector(target string, client *gofish.APIClient, logger *slog.L
 			append(systemBaseLabels, "serial_number", "manufacturer", "model"),
 			prometheus.Labels{"target": target},
 		),
+		systemHealthDesc: prometheus.NewDesc(
+			prometheus.BuildFQName("redfish", "system", "health"),
+			"Health of the system resource itself (1=OK, 0=not OK)",
+			append(systemBaseLabels, "health"),
+			prometheus.Labels{"target": target},
+		),
 		systemStatusHealthRollupDesc: prometheus.NewDesc(
 			prometheus.BuildFQName("redfish", "system", "health_rollup"),
 			"Overall combined health of the system including sub-components (1=OK, 0=not OK)",
@@ -46,6 +53,7 @@ func NewSystemsCollector(target string, client *gofish.APIClient, logger *slog.L
 // collected by this Collector.
 func (c *SystemsCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.systemInfoDesc
+	ch <- c.systemHealthDesc
 	ch <- c.systemStatusHealthRollupDesc
 }
 
@@ -69,12 +77,21 @@ func (c *SystemsCollector) Collect(ch chan<- prometheus.Metric) {
 			system.Model,
 		)
 
-		// Set the overall health rollup metric
-		ch <- prometheus.MustNewConstMetric(
-			c.systemStatusHealthRollupDesc,
-			prometheus.GaugeValue,
-			healthToFloat(system.Status.HealthRollup),
-			system.ID, string(system.Status.HealthRollup),
-		)
+		if system.Status.Health != "" {
+			ch <- prometheus.MustNewConstMetric(
+				c.systemHealthDesc,
+				prometheus.GaugeValue,
+				healthToFloat(system.Status.Health),
+				system.ID, string(system.Status.Health),
+			)
+		}
+		if system.Status.HealthRollup != "" {
+			ch <- prometheus.MustNewConstMetric(
+				c.systemStatusHealthRollupDesc,
+				prometheus.GaugeValue,
+				healthToFloat(system.Status.HealthRollup),
+				system.ID, string(system.Status.HealthRollup),
+			)
+		}
 	}
 }

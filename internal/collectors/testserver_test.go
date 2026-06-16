@@ -94,7 +94,7 @@ func defaultResponses() redfishResponses {
 			"SerialNumber": "SN123",
 			"Manufacturer": "Acme",
 			"Model": "TestServer",
-			"Status": {"HealthRollup": "OK"},
+			"Status": {"Health": "OK", "HealthRollup": "OK"},
 			"Memory": {"@odata.id": "/redfish/v1/Systems/1/Memory"}
 		}`,
 		memory: `{
