@@ -177,6 +177,9 @@ func (c *PowerCollector) Collect(ch chan<- prometheus.Metric) {
 		}
 
 		for _, redundancy := range power.Redundancy {
+			if redundancy.Name == "" {
+				continue
+			}
 			ch <- prometheus.MustNewConstMetric(
 				c.powerRedundancyHealthDesc,
 				prometheus.GaugeValue,
@@ -186,6 +189,10 @@ func (c *PowerCollector) Collect(ch chan<- prometheus.Metric) {
 		}
 
 		for _, ps := range power.PowerSupplies {
+			// Skip unnamed supplies to avoid empty/duplicate label sets (same HPE quirk as unnamed fans)
+			if ps.Name == "" {
+				continue
+			}
 			ch <- prometheus.MustNewConstMetric(
 				c.powerSuppliesHealthDesc,
 				prometheus.GaugeValue,

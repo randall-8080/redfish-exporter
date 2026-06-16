@@ -79,8 +79,8 @@ func (c *ThermalCollector) Collect(ch chan<- prometheus.Metric) {
 		}
 		// Export temperature readings and status
 		for _, t := range thermal.Temperatures {
-			// Skip disabled sensors
-			if t.Status.State == common.DisabledState {
+			// Skip disabled or absent sensors
+			if t.Status.State == common.DisabledState || t.Status.State == common.AbsentState {
 				continue
 			}
 			if t.ReadingCelsius == nil {
@@ -119,19 +119,20 @@ func (c *ThermalCollector) Collect(ch chan<- prometheus.Metric) {
 			if f.Name == "" {
 				continue
 			}
-			if f.Reading == nil {
-				continue
-			}
 			physicalContext := ""
 			if f.PhysicalContext != nil {
 				physicalContext = string(*f.PhysicalContext)
 			}
-			ch <- prometheus.MustNewConstMetric(
-				c.fanDesc,
-				prometheus.GaugeValue,
-				float64(*f.Reading),
-				chassis.ID, f.Name, physicalContext, string(f.ReadingUnits),
-			)
+			// RPM reading is optional; emit it only when available
+			if f.Reading != nil {
+				ch <- prometheus.MustNewConstMetric(
+					c.fanDesc,
+					prometheus.GaugeValue,
+					float64(*f.Reading),
+					chassis.ID, f.Name, physicalContext, string(f.ReadingUnits),
+				)
+			}
+			// Health is independent of reading availability — a fan can be Critical with no RPM data
 			if f.Status.State == common.EnabledState {
 				ch <- prometheus.MustNewConstMetric(
 					c.fanStatusDesc,
