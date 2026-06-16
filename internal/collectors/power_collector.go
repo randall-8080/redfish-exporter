@@ -112,16 +112,14 @@ func (c *PowerCollector) Collect(ch chan<- prometheus.Metric) {
 		return
 	}
 	for _, chassis := range chassies {
-		// Set the overall power capacity metric
+		powerState := 0.0
+		if chassis.PowerState == redfish.OnPowerState {
+			powerState = 1.0
+		}
 		ch <- prometheus.MustNewConstMetric(
 			c.powerStateDesc,
 			prometheus.GaugeValue,
-			func() float64 {
-				if chassis.PowerState == redfish.OnPowerState {
-					return 1.0
-				}
-				return 0.0
-			}(),
+			powerState,
 			chassis.ID,
 		)
 

@@ -19,7 +19,7 @@ type namedCollector struct {
 
 type RedfishCollector struct {
 	target string
-	ctx    context.Context
+	done   <-chan struct{} // closed when the probe request context is done
 	subs   []namedCollector
 
 	durationDesc *prometheus.Desc
@@ -42,7 +42,7 @@ func NewRedfishCollector(ctx context.Context, target string, client *gofish.APIC
 
 	return &RedfishCollector{
 		target: target,
-		ctx:    ctx,
+		done:   ctx.Done(),
 		subs:   subs,
 		durationDesc: prometheus.NewDesc(
 			"redfish_exporter_collector_duration_seconds",
@@ -101,7 +101,7 @@ func (c *RedfishCollector) Collect(ch chan<- prometheus.Metric) {
 				return
 			}
 			ch <- m
-		case <-c.ctx.Done():
+		case <-c.done:
 			// Drain inner in the background so sub-collector goroutines can exit cleanly.
 			go func() {
 				for range inner { //nolint:revive // intentional drain: unblocks sub-collector goroutines on cancel

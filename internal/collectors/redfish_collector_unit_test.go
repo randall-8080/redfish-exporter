@@ -41,7 +41,7 @@ func (s *stubCollector) Collect(ch chan<- prometheus.Metric) {
 func makeTestRedfishCollector(ctx context.Context, target string, subs []namedCollector) *RedfishCollector {
 	return &RedfishCollector{
 		target: target,
-		ctx:    ctx,
+		done:   ctx.Done(),
 		subs:   subs,
 		durationDesc: prometheus.NewDesc(
 			"redfish_exporter_collector_duration_seconds",
