@@ -1,6 +1,7 @@
 package collectors
 
 import (
+	"fmt"
 	"log/slog"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -66,16 +67,25 @@ func (c *NetworkCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.adapterHealthDesc
 }
 
-func (c *NetworkCollector) Collect(ch chan<- prometheus.Metric) {
-	c.collectEthernetInterfaces(ch)
-	c.collectNetworkAdapters(ch)
+// Collect satisfies prometheus.Collector; use redfish_collector_success to detect failures.
+func (c *NetworkCollector) Collect(ch chan<- prometheus.Metric) { _ = c.collect(ch) }
+
+func (c *NetworkCollector) collect(ch chan<- prometheus.Metric) error {
+	var firstErr error
+	if err := c.collectEthernetInterfaces(ch); err != nil {
+		firstErr = err
+	}
+	if err := c.collectNetworkAdapters(ch); err != nil && firstErr == nil {
+		firstErr = err
+	}
+	return firstErr
 }
 
-func (c *NetworkCollector) collectEthernetInterfaces(ch chan<- prometheus.Metric) {
+func (c *NetworkCollector) collectEthernetInterfaces(ch chan<- prometheus.Metric) error {
 	systems, err := c.client.Service.Systems()
 	if err != nil {
 		c.logger.Error("failed to get systems", "error", err, "target", c.target)
-		return
+		return fmt.Errorf("get systems: %w", err)
 	}
 	for _, system := range systems {
 		nics, err := system.EthernetInterfaces()
@@ -85,6 +95,7 @@ func (c *NetworkCollector) collectEthernetInterfaces(ch chan<- prometheus.Metric
 		}
 		for _, nic := range nics {
 			if nic.Status.State == common.AbsentState {
+				c.logger.Debug("skipping ethernet interface: absent", "interface", nic.ID, "system", system.ID, "target", c.target)
 				continue
 			}
 			linkUp := 0.0
@@ -115,13 +126,14 @@ func (c *NetworkCollector) collectEthernetInterfaces(ch chan<- prometheus.Metric
 			}
 		}
 	}
+	return nil
 }
 
-func (c *NetworkCollector) collectNetworkAdapters(ch chan<- prometheus.Metric) {
+func (c *NetworkCollector) collectNetworkAdapters(ch chan<- prometheus.Metric) error {
 	chassis, err := c.client.Service.Chassis()
 	if err != nil {
 		c.logger.Error("failed to get chassis", "error", err, "target", c.target)
-		return
+		return fmt.Errorf("get chassis: %w", err)
 	}
 	for _, chassis := range chassis {
 		adapters, err := chassis.NetworkAdapters()
@@ -131,6 +143,7 @@ func (c *NetworkCollector) collectNetworkAdapters(ch chan<- prometheus.Metric) {
 		}
 		for _, adapter := range adapters {
 			if adapter.Status.Health == "" {
+				c.logger.Debug("skipping network adapter: no health status", "adapter", adapter.ID, "chassis", chassis.ID, "target", c.target)
 				continue
 			}
 			ch <- prometheus.MustNewConstMetric(
@@ -141,4 +154,5 @@ func (c *NetworkCollector) collectNetworkAdapters(ch chan<- prometheus.Metric) {
 			)
 		}
 	}
+	return nil
 }

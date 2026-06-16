@@ -1,6 +1,7 @@
 package collectors
 
 import (
+	"fmt"
 	"log/slog"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -47,12 +48,14 @@ func (c *MemoryCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.memoryStatusDesc
 }
 
-// Collect is called by the Prometheus registry when collecting metrics.
-func (c *MemoryCollector) Collect(ch chan<- prometheus.Metric) {
+// Collect satisfies prometheus.Collector; use redfish_collector_success to detect failures.
+func (c *MemoryCollector) Collect(ch chan<- prometheus.Metric) { _ = c.collect(ch) }
+
+func (c *MemoryCollector) collect(ch chan<- prometheus.Metric) error {
 	systems, err := c.client.Service.Systems()
 	if err != nil {
 		c.logger.Error("failed to get systems", "error", err, "target", c.target)
-		return
+		return fmt.Errorf("get systems: %w", err)
 	}
 
 	for _, system := range systems {
@@ -63,8 +66,8 @@ func (c *MemoryCollector) Collect(ch chan<- prometheus.Metric) {
 		}
 
 		for _, mem := range memory {
-			// Skip absent or disabled memory modules
 			if mem.Status.State == common.AbsentState || mem.Status.State == common.DisabledState {
+				c.logger.Debug("skipping memory module", "memory_id", mem.ID, "state", mem.Status.State, "system", system.ID, "target", c.target)
 				continue
 			}
 
@@ -93,4 +96,5 @@ func (c *MemoryCollector) Collect(ch chan<- prometheus.Metric) {
 			}
 		}
 	}
+	return nil
 }

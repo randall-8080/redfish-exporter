@@ -1,6 +1,7 @@
 package collectors
 
 import (
+	"fmt"
 	"log/slog"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -60,13 +61,14 @@ func (c *ThermalCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.fanStatusDesc
 }
 
-// Collect is called by the Prometheus registry when collecting metrics.
-func (c *ThermalCollector) Collect(ch chan<- prometheus.Metric) {
+// Collect satisfies prometheus.Collector; use redfish_collector_success to detect failures.
+func (c *ThermalCollector) Collect(ch chan<- prometheus.Metric) { _ = c.collect(ch) }
 
+func (c *ThermalCollector) collect(ch chan<- prometheus.Metric) error {
 	chassies, err := c.client.Service.Chassis()
-	if err != nil || len(chassies) == 0 {
+	if err != nil {
 		c.logger.Error("failed to get chassis", "error", err, "target", c.target)
-		return
+		return fmt.Errorf("get chassis: %w", err)
 	}
 	for _, chassis := range chassies {
 		thermal, err := chassis.Thermal()
@@ -75,15 +77,18 @@ func (c *ThermalCollector) Collect(ch chan<- prometheus.Metric) {
 			continue
 		}
 		if thermal == nil {
+			c.logger.Debug("chassis has no thermal resource", "chassis", chassis.ID, "target", c.target)
 			continue
 		}
 		// Export temperature readings and status
 		for _, t := range thermal.Temperatures {
 			// Skip disabled or absent sensors
 			if t.Status.State == common.DisabledState || t.Status.State == common.AbsentState {
+				c.logger.Debug("skipping temperature sensor", "sensor", t.Name, "state", t.Status.State, "chassis", chassis.ID, "target", c.target)
 				continue
 			}
 			if t.ReadingCelsius == nil {
+				c.logger.Debug("skipping temperature sensor: no reading", "sensor", t.Name, "chassis", chassis.ID, "target", c.target)
 				continue
 			}
 			physicalContext := ""
@@ -111,20 +116,20 @@ func (c *ThermalCollector) Collect(ch chan<- prometheus.Metric) {
 		// Export fan status metrics
 		for _, f := range thermal.Fans {
 			if f.Status.State == common.AbsentState {
-				// Skip absent fans
+				c.logger.Debug("skipping fan: absent", "fan", f.Name, "chassis", chassis.ID, "target", c.target)
 				continue
 			}
-			// Some fans may not have a name (looking at you, HPE) or OEM names
-			// we skip those to avoid metric label issues and zero values
 			if f.Name == "" {
+				c.logger.Debug("skipping unnamed fan", "chassis", chassis.ID, "target", c.target)
 				continue
 			}
 			physicalContext := ""
 			if f.PhysicalContext != nil {
 				physicalContext = string(*f.PhysicalContext)
 			}
-			// RPM reading is optional; emit it only when available
-			if f.Reading != nil {
+			if f.Reading == nil {
+				c.logger.Debug("fan has no RPM reading", "fan", f.Name, "chassis", chassis.ID, "target", c.target)
+			} else {
 				ch <- prometheus.MustNewConstMetric(
 					c.fanDesc,
 					prometheus.GaugeValue,
@@ -143,4 +148,5 @@ func (c *ThermalCollector) Collect(ch chan<- prometheus.Metric) {
 			}
 		}
 	}
+	return nil
 }

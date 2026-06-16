@@ -1,6 +1,7 @@
 package collectors
 
 import (
+	"fmt"
 	"log/slog"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -103,12 +104,14 @@ func (c *SystemsCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.memoryHealthRollupDesc
 }
 
-// Collect is called by the Prometheus registry when collecting metrics.
-func (c *SystemsCollector) Collect(ch chan<- prometheus.Metric) {
+// Collect satisfies prometheus.Collector; use redfish_collector_success to detect failures.
+func (c *SystemsCollector) Collect(ch chan<- prometheus.Metric) { _ = c.collect(ch) }
+
+func (c *SystemsCollector) collect(ch chan<- prometheus.Metric) error {
 	systems, err := c.client.Service.Systems()
 	if err != nil {
-		c.logger.Error("Failed to get Systems collection", "error", err)
-		return
+		c.logger.Error("failed to get systems", "error", err, "target", c.target)
+		return fmt.Errorf("get systems: %w", err)
 	}
 	for _, system := range systems {
 		ch <- prometheus.MustNewConstMetric(
@@ -187,4 +190,5 @@ func (c *SystemsCollector) Collect(ch chan<- prometheus.Metric) {
 			)
 		}
 	}
+	return nil
 }

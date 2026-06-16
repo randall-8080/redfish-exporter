@@ -25,9 +25,12 @@ func newStubCollector(name string) *stubCollector {
 
 func (s *stubCollector) Describe(ch chan<- *prometheus.Desc) { ch <- s.desc }
 
-func (s *stubCollector) Collect(ch chan<- prometheus.Metric) {
+func (s *stubCollector) collect(ch chan<- prometheus.Metric) error {
 	ch <- prometheus.MustNewConstMetric(s.desc, prometheus.GaugeValue, 1.0)
+	return nil
 }
+
+func (s *stubCollector) Collect(ch chan<- prometheus.Metric) { _ = s.collect(ch) }
 
 // makeTestRedfishCollector builds a RedfishCollector with pre-built sub-collectors,
 // bypassing the gofish client dependency for unit testing.
@@ -35,9 +38,16 @@ func makeTestRedfishCollector(target string, subs []namedCollector) *RedfishColl
 	return &RedfishCollector{
 		target: target,
 		subs:   subs,
+		logger: discardLogger(),
 		durationDesc: prometheus.NewDesc(
 			"redfish_exporter_collector_duration_seconds",
 			"Collector scrape duration",
+			[]string{"target", "collector"},
+			nil,
+		),
+		successDesc: prometheus.NewDesc(
+			"redfish_collector_success",
+			"Whether the collector scraped without error (1=success, 0=failure)",
 			[]string{"target", "collector"},
 			nil,
 		),
@@ -85,8 +95,8 @@ func TestRedfishCollector_Describe_SendsSubAndDurationDescriptors(t *testing.T) 
 	for d := range ch {
 		descs = append(descs, d)
 	}
-	// 1 desc per sub-collector + 1 duration desc
-	assert.Len(t, descs, 3)
+	// 1 desc per sub-collector + 1 duration desc + 1 success desc
+	assert.Len(t, descs, 4)
 }
 
 func TestRedfishCollector_Collect_EmitsDurationPerSubCollector(t *testing.T) {
@@ -96,6 +106,6 @@ func TestRedfishCollector_Collect_EmitsDurationPerSubCollector(t *testing.T) {
 	}
 	c := makeTestRedfishCollector("test-target", subs)
 
-	// 1 stub metric per sub-collector (2) + 1 duration metric per sub-collector (2) = 4
-	assert.Equal(t, 4, testutil.CollectAndCount(c))
+	// 1 stub metric per sub-collector (2) + 1 duration metric per sub-collector (2) + 1 success metric per sub-collector (2) = 6
+	assert.Equal(t, 6, testutil.CollectAndCount(c))
 }

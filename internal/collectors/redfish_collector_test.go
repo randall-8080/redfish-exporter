@@ -70,6 +70,19 @@ func TestRedfishCollectorIntegration(t *testing.T) {
 		assert.Equal(t, 5, testutil.CollectAndCount(collector, "redfish_exporter_collector_duration_seconds"))
 	})
 
+	t.Run("all collectors report success", func(t *testing.T) {
+		assert.Equal(t, 5, testutil.CollectAndCount(collector, "redfish_collector_success"))
+		for _, mf := range mfs {
+			if mf.GetName() != "redfish_collector_success" {
+				continue
+			}
+			for _, m := range mf.GetMetric() {
+				assert.Equal(t, 1.0, m.GetGauge().GetValue(),
+					"expected success=1 for collector %v", m.GetLabel())
+			}
+		}
+	})
+
 	t.Run("power", func(t *testing.T) {
 		for _, name := range []string{
 			"redfish_chassis_health",

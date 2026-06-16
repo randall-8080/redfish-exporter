@@ -1,6 +1,7 @@
 package collectors
 
 import (
+	"fmt"
 	"log/slog"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -127,13 +128,14 @@ func (c *PowerCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.powerSuppliesHealthDesc
 }
 
-// Collect is called by the Prometheus registry when collecting metrics.
-func (c *PowerCollector) Collect(ch chan<- prometheus.Metric) {
+// Collect satisfies prometheus.Collector; use redfish_collector_success to detect failures.
+func (c *PowerCollector) Collect(ch chan<- prometheus.Metric) { _ = c.collect(ch) }
 
+func (c *PowerCollector) collect(ch chan<- prometheus.Metric) error {
 	chassies, err := c.client.Service.Chassis()
-	if err != nil || len(chassies) == 0 {
+	if err != nil {
 		c.logger.Error("failed to get chassis", "error", err, "target", c.target)
-		return
+		return fmt.Errorf("get chassis: %w", err)
 	}
 	for _, chassis := range chassies {
 		powerState := 0.0
@@ -224,6 +226,7 @@ func (c *PowerCollector) Collect(ch chan<- prometheus.Metric) {
 
 		for _, redundancy := range power.Redundancy {
 			if redundancy.Name == "" {
+				c.logger.Debug("skipping unnamed redundancy entry", "chassis", chassis.ID, "target", c.target)
 				continue
 			}
 			ch <- prometheus.MustNewConstMetric(
@@ -235,8 +238,8 @@ func (c *PowerCollector) Collect(ch chan<- prometheus.Metric) {
 		}
 
 		for _, ps := range power.PowerSupplies {
-			// Skip unnamed supplies to avoid empty/duplicate label sets (same HPE quirk as unnamed fans)
 			if ps.Name == "" {
+				c.logger.Debug("skipping unnamed power supply", "chassis", chassis.ID, "target", c.target)
 				continue
 			}
 			ch <- prometheus.MustNewConstMetric(
@@ -248,5 +251,5 @@ func (c *PowerCollector) Collect(ch chan<- prometheus.Metric) {
 		}
 
 	}
-
+	return nil
 }
