@@ -18,80 +18,117 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-func TestRedfishCollectorIntegration(t *testing.T) {
-
+func startMockupContainer(t *testing.T) (target string) {
+	t.Helper()
 	ctx := context.Background()
-
-	// Start redfish mockup server container
 	req := testcontainers.ContainerRequest{
-		Image:        "dmtf/redfish-mockup-server:latest",
+		Image:        "dmtf/redfish-mockup-server:1.2.9",
 		ExposedPorts: []string{"8000/tcp"},
 		WaitingFor:   wait.ForHTTP("/redfish/v1/").WithPort("8000/tcp").WithStartupTimeout(30 * time.Second),
 	}
-
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: req,
 		Started:          true,
 	})
 	require.NoError(t, err)
-	defer container.Terminate(ctx)
+	t.Cleanup(func() { container.Terminate(ctx) })
 
-	// Get container host and port and combine to target URL
 	host, err := container.Host(ctx)
-	require.NoError(t, err, "failed to get container host")
-
+	require.NoError(t, err)
 	port, err := container.MappedPort(ctx, "8000")
-	require.NoError(t, err, "failed to get mapped port")
+	require.NoError(t, err)
+	return "http://" + host + ":" + port.Port()
+}
 
-	target := "http://" + host + ":" + port.Port()
+func TestRedfishCollectorIntegration(t *testing.T) {
+	target := startMockupContainer(t)
 
-	// Configure collector with all sub-collectors enabled
-	config := &config.Config{
-		Modules: map[string]config.Module{
-			"default": {
-				Collectors: config.CollectorsConfig{
-					Thermal: true,
-					Power:   true,
-					Systems: true,
-				},
-			},
-		},
+	cc := config.CollectorsConfig{
+		Thermal: true,
+		Power:   true,
+		Systems: true,
+		Memory:  true,
+		Network: true,
 	}
-
-	client, err := client.NewClientFromModuleConfig(config.Modules["default"], target)
+	redfishClient, err := client.NewClientFromModuleConfig(config.Module{Collectors: cc}, target)
 	require.NoError(t, err, "failed to create Redfish client")
 
-	// Create collector
-	collector := NewRedfishCollector(target, client, slog.Default(), config.Modules["default"].Collectors)
+	collector := NewRedfishCollector(target, redfishClient, slog.Default(), cc)
 
-	// Create registry and register collector
 	registry := prometheus.NewRegistry()
-	err = registry.Register(collector)
+	require.NoError(t, registry.Register(collector))
+
+	mfs, err := registry.Gather()
 	require.NoError(t, err)
 
-	// Collect metrics
-	metrics, err := registry.Gather()
-	require.NoError(t, err)
-
-	// Verify we got metrics
-	assert.NotEmpty(t, metrics, "expected to collect metrics")
-
-	// Verify metrics contain expected families
-	metricFamilies := make(map[string]bool)
-	for _, mf := range metrics {
-		metricFamilies[mf.GetName()] = true
+	got := make(map[string]bool, len(mfs))
+	for _, mf := range mfs {
+		got[mf.GetName()] = true
 	}
 
-	// Check for some expected metric names
-	expectedMetrics := []string{
-		"redfish_exporter_collector_duration_seconds",
-	}
+	t.Run("duration metric emitted for every collector", func(t *testing.T) {
+		assert.Equal(t, 5, testutil.CollectAndCount(collector, "redfish_exporter_collector_duration_seconds"))
+	})
 
-	for _, expected := range expectedMetrics {
-		assert.True(t, metricFamilies[expected], "expected metric %s not found", expected)
-	}
+	t.Run("power", func(t *testing.T) {
+		for _, name := range []string{
+			"redfish_chassis_health",
+			"redfish_power_state",
+			"redfish_power_consumed_watts",
+			"redfish_power_capacity_watts",
+			"redfish_power_average_consumed_watts",
+			"redfish_power_max_consumed_watts",
+			"redfish_power_min_consumed_watts",
+			"redfish_power_control_health",
+			"redfish_power_supply_health",
+		} {
+			assert.True(t, got[name], "missing metric %s", name)
+		}
+	})
 
-	// Verify collector count
-	count := testutil.CollectAndCount(collector)
-	assert.Greater(t, count, 0, "expected to collect at least one metric")
+	t.Run("thermal", func(t *testing.T) {
+		for _, name := range []string{
+			"redfish_temperature_celsius",
+			"redfish_temperature_health",
+			"redfish_fan_rpm",
+			"redfish_fan_health",
+		} {
+			assert.True(t, got[name], "missing metric %s", name)
+		}
+	})
+
+	t.Run("systems", func(t *testing.T) {
+		for _, name := range []string{
+			"redfish_system_info",
+			"redfish_system_health",
+			"redfish_system_health_rollup",
+			"redfish_system_processor_count",
+			"redfish_system_processor_health",
+			"redfish_system_processor_health_rollup",
+			"redfish_system_memory_gib",
+			"redfish_system_memory_health",
+			"redfish_system_memory_health_rollup",
+		} {
+			assert.True(t, got[name], "missing metric %s", name)
+		}
+	})
+
+	t.Run("memory", func(t *testing.T) {
+		for _, name := range []string{
+			"redfish_memory_capacity_mib",
+			"redfish_memory_health",
+		} {
+			assert.True(t, got[name], "missing metric %s", name)
+		}
+	})
+
+	t.Run("network", func(t *testing.T) {
+		for _, name := range []string{
+			"redfish_network_interface_link_up",
+			"redfish_network_interface_speed_mbps",
+			"redfish_network_interface_health",
+		} {
+			assert.True(t, got[name], "missing metric %s", name)
+		}
+	})
 }
