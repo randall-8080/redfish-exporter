@@ -4,8 +4,9 @@ modules:
       username: redfish
       password: redfish
     collectors:
-      thermal: false
+      thermal: true
       power: true
+      systems: true
       memory: true
       network: true
     insecure: true
@@ -16,5 +17,7 @@ modules:
     collectors:
       thermal: true
       power: false
+      systems: false
       memory: false
+      network: false
     insecure: true

@@ -73,6 +73,7 @@ modules:
       power: true
       systems: true
       memory: true
+      network: true
     insecure: false
 ```
 
