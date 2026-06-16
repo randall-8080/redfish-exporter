@@ -59,7 +59,7 @@ func TestNewRedfishCollector_SubCollectorSelection(t *testing.T) {
 		{"power only", config.CollectorsConfig{Power: true}, 1},
 		{"systems only", config.CollectorsConfig{Systems: true}, 1},
 		{"memory only", config.CollectorsConfig{Memory: true}, 1},
-		{"all enabled", config.CollectorsConfig{Thermal: true, Power: true, Systems: true, Memory: true}, 4},
+		{"all enabled", config.CollectorsConfig{Thermal: true, Power: true, Systems: true, Memory: true, Network: true}, 5},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

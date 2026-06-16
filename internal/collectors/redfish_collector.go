@@ -37,6 +37,9 @@ func NewRedfishCollector(target string, client *gofish.APIClient, logger *slog.L
 	if cc.Memory {
 		subs = append(subs, namedCollector{"memory", NewMemoryCollector(target, client, logger)})
 	}
+	if cc.Network {
+		subs = append(subs, namedCollector{"network", NewNetworkCollector(target, client, logger)})
+	}
 
 	return &RedfishCollector{
 		target: target,

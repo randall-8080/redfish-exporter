@@ -143,6 +143,17 @@ Tracks capacity and health per DIMM slot. Absent and disabled modules are skippe
 | `redfish_memory_capacity_mib` | DIMM capacity in MiB |
 | `redfish_memory_health` | DIMM health |
 
+**Network** (`collectors.network: true`) — reads `Systems[*].EthernetInterfaces[*]` and `Chassis[*].NetworkAdapters[*]`
+
+Tracks per-NIC link state, speed, and health from the system's ethernet interfaces, plus health of physical network adapters on the chassis. Absent interfaces are skipped. Speed is only emitted when non-zero.
+
+| Metric | Description |
+|---|---|
+| `redfish_network_interface_link_up` | Whether the NIC link is up (1=LinkUp, 0=other) |
+| `redfish_network_interface_speed_mbps` | Current link speed in Mbps |
+| `redfish_network_interface_health` | NIC health |
+| `redfish_network_adapter_health` | Physical network adapter health |
+
 ### Metric reference
 
 | Metric | Labels |
@@ -173,6 +184,10 @@ Tracks capacity and health per DIMM slot. Absent and disabled modules are skippe
 | `redfish_system_memory_health_rollup` | `target`, `system_id`, `health` |
 | `redfish_memory_capacity_mib` | `target`, `system_id`, `memory_id`, `memory_location` |
 | `redfish_memory_health` | `target`, `system_id`, `memory_id`, `memory_location`, `health` |
+| `redfish_network_interface_link_up` | `target`, `system_id`, `interface_id`, `mac_address` |
+| `redfish_network_interface_speed_mbps` | `target`, `system_id`, `interface_id`, `mac_address` |
+| `redfish_network_interface_health` | `target`, `system_id`, `interface_id`, `mac_address`, `health` |
+| `redfish_network_adapter_health` | `target`, `chassis_id`, `adapter_id`, `manufacturer`, `model`, `health` |
 
 Disabled or absent components are skipped entirely — they produce no metric rather than a zero value. Optional fields (e.g. `HealthRollup`, `ProcessorSummary`) are also skipped when not provided by the BMC.
 

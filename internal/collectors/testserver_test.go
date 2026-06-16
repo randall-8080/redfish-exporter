@@ -11,15 +11,19 @@ import (
 
 // redfishResponses holds the JSON bodies served by the test Redfish server.
 type redfishResponses struct {
-	serviceRoot string
-	chassis     string
-	chassisItem string
-	power       string
-	thermal     string
-	systems     string
-	systemItem  string
-	memory      string
-	memoryItem  string
+	serviceRoot           string
+	chassis               string
+	chassisItem           string
+	power                 string
+	thermal               string
+	networkAdapters       string
+	networkAdapterItem    string
+	systems               string
+	systemItem            string
+	memory                string
+	memoryItem            string
+	ethernetInterfaces    string
+	ethernetInterfaceItem string
 }
 
 func defaultResponses() redfishResponses {
@@ -41,8 +45,9 @@ func defaultResponses() redfishResponses {
 			"Id": "1",
 			"PowerState": "On",
 			"Status": {"Health": "OK", "HealthRollup": "OK"},
-			"Power":   {"@odata.id": "/redfish/v1/Chassis/1/Power"},
-			"Thermal": {"@odata.id": "/redfish/v1/Chassis/1/Thermal"}
+			"Power":           {"@odata.id": "/redfish/v1/Chassis/1/Power"},
+			"Thermal":         {"@odata.id": "/redfish/v1/Chassis/1/Thermal"},
+			"NetworkAdapters": {"@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters"}
 		}`,
 		power: `{
 			"@odata.id": "/redfish/v1/Chassis/1/Power",
@@ -83,6 +88,18 @@ func defaultResponses() redfishResponses {
 				"Status": {"Health": "OK", "State": "Enabled"}
 			}]
 		}`,
+		networkAdapters: `{
+			"@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters",
+			"Members": [{"@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/1"}],
+			"Members@odata.count": 1
+		}`,
+		networkAdapterItem: `{
+			"@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters/1",
+			"Id": "1",
+			"Manufacturer": "Intel",
+			"Model": "X550",
+			"Status": {"Health": "OK", "State": "Enabled"}
+		}`,
 		systems: `{
 			"@odata.id": "/redfish/v1/Systems",
 			"Members": [{"@odata.id": "/redfish/v1/Systems/1"}],
@@ -103,6 +120,7 @@ func defaultResponses() redfishResponses {
 				"TotalSystemMemoryGiB": 128,
 				"Status": {"Health": "OK", "HealthRollup": "OK"}
 			},
+			"EthernetInterfaces": {"@odata.id": "/redfish/v1/Systems/1/EthernetInterfaces"},
 			"Memory": {"@odata.id": "/redfish/v1/Systems/1/Memory"}
 		}`,
 		memory: `{
@@ -117,6 +135,19 @@ func defaultResponses() redfishResponses {
 			"DeviceLocator": "DIMM_A1",
 			"Status": {"Health": "OK", "State": "Enabled"}
 		}`,
+		ethernetInterfaces: `{
+			"@odata.id": "/redfish/v1/Systems/1/EthernetInterfaces",
+			"Members": [{"@odata.id": "/redfish/v1/Systems/1/EthernetInterfaces/1"}],
+			"Members@odata.count": 1
+		}`,
+		ethernetInterfaceItem: `{
+			"@odata.id": "/redfish/v1/Systems/1/EthernetInterfaces/1",
+			"Id": "1",
+			"MACAddress": "AA:BB:CC:DD:EE:FF",
+			"SpeedMbps": 10000,
+			"LinkStatus": "LinkUp",
+			"Status": {"Health": "OK", "State": "Enabled"}
+		}`,
 	}
 }
 
@@ -124,15 +155,19 @@ func defaultResponses() redfishResponses {
 func newTestServer(t *testing.T, r redfishResponses) *httptest.Server {
 	t.Helper()
 	routes := map[string]string{
-		"/redfish/v1/":                   r.serviceRoot,
-		"/redfish/v1/Chassis":            r.chassis,
-		"/redfish/v1/Chassis/1":          r.chassisItem,
-		"/redfish/v1/Chassis/1/Power":    r.power,
-		"/redfish/v1/Chassis/1/Thermal":  r.thermal,
-		"/redfish/v1/Systems":            r.systems,
-		"/redfish/v1/Systems/1":          r.systemItem,
-		"/redfish/v1/Systems/1/Memory":   r.memory,
-		"/redfish/v1/Systems/1/Memory/1": r.memoryItem,
+		"/redfish/v1/":                               r.serviceRoot,
+		"/redfish/v1/Chassis":                        r.chassis,
+		"/redfish/v1/Chassis/1":                      r.chassisItem,
+		"/redfish/v1/Chassis/1/Power":                r.power,
+		"/redfish/v1/Chassis/1/Thermal":              r.thermal,
+		"/redfish/v1/Chassis/1/NetworkAdapters":      r.networkAdapters,
+		"/redfish/v1/Chassis/1/NetworkAdapters/1":    r.networkAdapterItem,
+		"/redfish/v1/Systems":                        r.systems,
+		"/redfish/v1/Systems/1":                      r.systemItem,
+		"/redfish/v1/Systems/1/Memory":               r.memory,
+		"/redfish/v1/Systems/1/Memory/1":             r.memoryItem,
+		"/redfish/v1/Systems/1/EthernetInterfaces":   r.ethernetInterfaces,
+		"/redfish/v1/Systems/1/EthernetInterfaces/1": r.ethernetInterfaceItem,
 	}
 	mux := http.NewServeMux()
 	for path, body := range routes {

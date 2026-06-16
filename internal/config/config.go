@@ -27,6 +27,7 @@ type CollectorsConfig struct {
 	Power   bool `yaml:"power"`
 	Systems bool `yaml:"systems"`
 	Memory  bool `yaml:"memory"`
+	Network bool `yaml:"network"`
 }
 
 func Load(path string) (*Config, error) {
