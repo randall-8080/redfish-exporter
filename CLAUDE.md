@@ -21,7 +21,7 @@ go test -tags=integration -run TestRedfishCollector ./internal/collectors/
 go run main.go --config.file config.yaml          # run locally
 ```
 
-There is no Makefile or golangci-lint config yet.
+Linting uses `.golangci.yml`; run `golangci-lint run` locally or via `pre-commit run golangci-lint`. There is no Makefile.
 
 ## Architecture
 
@@ -58,7 +58,7 @@ Enabled collectors are selected via `config.CollectorsConfig` boolean flags (`Th
 
 ### Health encoding
 
-Redfish `common.Health` values are encoded as floats: `OK=1.0`, `Warning=0.5`, `Critical=0.0`. Disabled/absent items are skipped rather than emitted as zero.
+Redfish `common.Health` values are encoded as binary floats: `OK=1.0`, anything else `0.0`. The raw Redfish health string is carried as a `health` variable label (e.g. `health="Warning"`), so alert rules can inspect the exact value without a three-valued metric. Disabled/absent items are skipped rather than emitted as zero.
 
 ## Config File Format
 
@@ -113,6 +113,16 @@ github.com/prometheus/common/promslog  — structured slog-backed logger
 gopkg.in/yaml.v3                       — config parsing
 github.com/testcontainers/testcontainers-go — integration tests (test only)
 ```
+
+## Versioning
+
+This project uses **semantic versioning** with **Conventional Commits**:
+
+- `feat:` → minor bump; `fix:` → patch bump; `feat!:` / `BREAKING CHANGE:` footer → major bump
+- Scopes are optional but encouraged: `feat(thermal):`, `fix(power):`, `chore(ci):`
+- Releases are triggered by pushing a `v*` tag; GoReleaser handles changelog and container publishing
+
+Always ask before creating a commit. Commit after every self-contained logical change rather than batching unrelated edits into one commit.
 
 ## DO NOT
 
