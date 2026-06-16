@@ -95,6 +95,14 @@ func defaultResponses() redfishResponses {
 			"Manufacturer": "Acme",
 			"Model": "TestServer",
 			"Status": {"Health": "OK", "HealthRollup": "OK"},
+			"ProcessorSummary": {
+				"Count": 2,
+				"Status": {"Health": "OK", "HealthRollup": "OK"}
+			},
+			"MemorySummary": {
+				"TotalSystemMemoryGiB": 128,
+				"Status": {"Health": "OK", "HealthRollup": "OK"}
+			},
 			"Memory": {"@odata.id": "/redfish/v1/Systems/1/Memory"}
 		}`,
 		memory: `{

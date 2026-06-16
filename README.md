@@ -26,10 +26,16 @@ Basic structure:
 
 ```yaml
 modules:
-    default:
-        timeout: 10s
-        username: admin
-        password: secret
+  default:
+    auth:
+      username: admin
+      password: secret
+    collectors:
+      thermal: true
+      power: true
+      systems: true
+      memory: true
+    insecure: false
 ```
 
 ### Prometheus Configuration
@@ -83,63 +89,92 @@ redfish_temperature_health{health="Warning"} == 0
 
 Each collector is enabled per-module in the config under `collectors:`.
 
-**Power** (`collectors.power: true`) — reads `Chassis[*].Power`
+**Power** (`collectors.power: true`) — reads `Chassis[*]` and `Chassis[*].Power`
 
-Tracks chassis power state, per-control-zone capacity and consumption (current, average, min, max), redundancy group health, and individual PSU health.
+Tracks chassis-level health, power state, per-control-zone capacity and consumption (current, average, min, max), power control domain health, redundancy group health, and individual PSU health.
 
 | Metric | Description |
 |---|---|
 | `redfish_power_state` | Chassis power state (1=On, 0=Off) |
+| `redfish_chassis_health` | Chassis health |
+| `redfish_chassis_health_rollup` | Chassis rollup health including all subordinate resources |
 | `redfish_power_capacity_watts` | Max power capacity per control zone |
 | `redfish_power_consumed_watts` | Current power consumption per control zone |
 | `redfish_power_average_consumed_watts` | Average power consumption per control zone |
 | `redfish_power_max_consumed_watts` | Peak power consumption per control zone |
 | `redfish_power_min_consumed_watts` | Minimum power consumption per control zone |
-| `redfish_power_redundancy_health` | Power redundancy group health (three-valued) |
-| `redfish_power_supply_health` | Individual PSU health (three-valued) |
+| `redfish_power_control_health` | Power control domain health |
+| `redfish_power_redundancy_health` | Power redundancy group health |
+| `redfish_power_supply_health` | Individual PSU health |
 
 **Thermal** (`collectors.thermal: true`) — reads `Chassis[*].Thermal`
 
-Tracks per-sensor temperature readings and health, and per-fan speed and health. Disabled sensors and absent or unnamed fans are skipped.
+Tracks per-sensor temperature readings and health, and per-fan speed and health. Disabled and absent sensors are skipped. Fans with no RPM reading still emit a health metric.
 
 | Metric | Description |
 |---|---|
 | `redfish_temperature_celsius` | Temperature reading in Celsius |
-| `redfish_temperature_health` | Temperature sensor health (binary) |
+| `redfish_temperature_health` | Temperature sensor health |
 | `redfish_fan_rpm` | Fan speed in RPM |
-| `redfish_fan_health` | Fan health (binary) |
+| `redfish_fan_health` | Fan health |
 
 **Systems** (`collectors.systems: true`) — reads `Systems[*]`
 
-Emits a metadata info metric and overall health rollup per system.
+Emits system identity, overall health, and summary health and counts for processors and memory.
 
 | Metric | Description |
 |---|---|
 | `redfish_system_info` | System identity info (serial, manufacturer, model); always 1 |
-| `redfish_system_health_rollup` | Overall system health rollup (binary) |
+| `redfish_system_health` | System health |
+| `redfish_system_health_rollup` | Overall system rollup health including sub-components |
+| `redfish_system_processor_count` | Number of physical processors |
+| `redfish_system_processor_health` | Processor summary health |
+| `redfish_system_processor_health_rollup` | Processor rollup health |
+| `redfish_system_memory_gib` | Total system memory in GiB |
+| `redfish_system_memory_health` | Memory summary health |
+| `redfish_system_memory_health_rollup` | Memory rollup health |
 
 **Memory** (`collectors.memory: true`) — reads `Systems[*].Memory[*]`
 
-Tracks capacity and health per DIMM slot. Absent and disabled modules are skipped entirely. Modules in `StandbySpare` state emit capacity but no status metric.
+Tracks capacity and health per DIMM slot. Absent and disabled modules are skipped entirely.
 
 | Metric | Description |
 |---|---|
 | `redfish_memory_capacity_mib` | DIMM capacity in MiB |
-| `redfish_memory_health` | DIMM health (binary) |
+| `redfish_memory_health` | DIMM health |
 
 ### Metric reference
 
-| Metric | Health encoding | Labels |
-|---|---|---|
-| `redfish_system_info` | — | `target`, `system_id`, `serial_number`, `manufacturer`, `model` |
-| `redfish_system_health_rollup` | binary | `target`, `system_id`, `health` |
-| `redfish_temperature_health` | binary | `target`, `chassis_id`, `sensor`, `physical_context`, `health` |
-| `redfish_fan_health` | binary | `target`, `chassis_id`, `fan`, `physical_context`, `health` |
-| `redfish_memory_health` | binary | `target`, `system_id`, `memory_id`, `memory_location`, `health` |
-| `redfish_power_redundancy_health` | binary | `target`, `chassis_id`, `name`, `member_id`, `health` |
-| `redfish_power_supply_health` | binary | `target`, `chassis_id`, `name`, `member_id`, `health` |
+| Metric | Labels |
+|---|---|
+| `redfish_chassis_health` | `target`, `chassis_id`, `health` |
+| `redfish_chassis_health_rollup` | `target`, `chassis_id`, `health` |
+| `redfish_power_state` | `target`, `chassis_id` |
+| `redfish_power_capacity_watts` | `target`, `chassis_id`, `name`, `member_id` |
+| `redfish_power_consumed_watts` | `target`, `chassis_id`, `name`, `member_id` |
+| `redfish_power_average_consumed_watts` | `target`, `chassis_id`, `name`, `member_id` |
+| `redfish_power_max_consumed_watts` | `target`, `chassis_id`, `name`, `member_id` |
+| `redfish_power_min_consumed_watts` | `target`, `chassis_id`, `name`, `member_id` |
+| `redfish_power_control_health` | `target`, `chassis_id`, `name`, `member_id`, `health` |
+| `redfish_power_redundancy_health` | `target`, `chassis_id`, `name`, `member_id`, `health` |
+| `redfish_power_supply_health` | `target`, `chassis_id`, `name`, `member_id`, `health` |
+| `redfish_temperature_celsius` | `target`, `chassis_id`, `sensor`, `physical_context` |
+| `redfish_temperature_health` | `target`, `chassis_id`, `sensor`, `physical_context`, `health` |
+| `redfish_fan_rpm` | `target`, `chassis_id`, `fan`, `physical_context`, `unit` |
+| `redfish_fan_health` | `target`, `chassis_id`, `fan`, `physical_context`, `health` |
+| `redfish_system_info` | `target`, `system_id`, `serial_number`, `manufacturer`, `model` |
+| `redfish_system_health` | `target`, `system_id`, `health` |
+| `redfish_system_health_rollup` | `target`, `system_id`, `health` |
+| `redfish_system_processor_count` | `target`, `system_id` |
+| `redfish_system_processor_health` | `target`, `system_id`, `health` |
+| `redfish_system_processor_health_rollup` | `target`, `system_id`, `health` |
+| `redfish_system_memory_gib` | `target`, `system_id` |
+| `redfish_system_memory_health` | `target`, `system_id`, `health` |
+| `redfish_system_memory_health_rollup` | `target`, `system_id`, `health` |
+| `redfish_memory_capacity_mib` | `target`, `system_id`, `memory_id`, `memory_location` |
+| `redfish_memory_health` | `target`, `system_id`, `memory_id`, `memory_location`, `health` |
 
-Disabled or absent components are skipped entirely — they produce no metric rather than a zero value.
+Disabled or absent components are skipped entirely — they produce no metric rather than a zero value. Optional fields (e.g. `HealthRollup`, `ProcessorSummary`) are also skipped when not provided by the BMC.
 
 ## License
 
