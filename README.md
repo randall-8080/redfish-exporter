@@ -1,5 +1,7 @@
 # Redfish Exporter
 
+> **Experimental:** This project is under active development. Metrics, configuration, and behaviour may change without notice between versions.
+
 A Prometheus exporter for Redfish-based hardware monitoring.
 
 ## Description
@@ -194,4 +196,4 @@ Disabled or absent components are skipped entirely — they produce no metric ra
 
 ## License
 
-See LICENSE file for details.
+MIT — see [LICENSE](LICENSE) for details.
