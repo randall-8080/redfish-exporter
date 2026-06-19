@@ -38,6 +38,7 @@ modules:
       systems: true
       memory: true
       network: true
+      managers: true
     insecure: false
 ```
 
@@ -146,6 +147,15 @@ Tracks capacity and health per DIMM slot. Absent and disabled modules are skippe
 | `redfish_memory_capacity_mib` | DIMM capacity in MiB |
 | `redfish_memory_health` | DIMM health |
 
+**Managers** (`collectors.managers: true`) — reads `Managers[*]`
+
+Exposes BMC/management controller identity and health. Useful for tracking firmware versions and BMC availability.
+
+| Metric | Description |
+|---|---|
+| `redfish_manager_info` | BMC identity (type, model, firmware version, manufacturer); always 1 |
+| `redfish_manager_health` | BMC health |
+
 **Network** (`collectors.network: true`) — reads `Systems[*].EthernetInterfaces[*]` and `Chassis[*].NetworkAdapters[*]`
 
 Tracks per-NIC link state, speed, and health from the system's ethernet interfaces, plus health of physical network adapters on the chassis. Absent interfaces are skipped. Speed is only emitted when non-zero.
@@ -187,6 +197,8 @@ Tracks per-NIC link state, speed, and health from the system's ethernet interfac
 | `redfish_system_memory_health_rollup` | `target`, `system_id`, `health` |
 | `redfish_memory_capacity_mib` | `target`, `system_id`, `memory_id`, `memory_location` |
 | `redfish_memory_health` | `target`, `system_id`, `memory_id`, `memory_location`, `health` |
+| `redfish_manager_info` | `target`, `manager_id`, `manager_type`, `model`, `firmware_version`, `manufacturer` |
+| `redfish_manager_health` | `target`, `manager_id`, `health` |
 | `redfish_network_interface_link_up` | `target`, `system_id`, `interface_id`, `mac_address` |
 | `redfish_network_interface_speed_mbps` | `target`, `system_id`, `interface_id`, `mac_address` |
 | `redfish_network_interface_health` | `target`, `system_id`, `interface_id`, `mac_address`, `health` |

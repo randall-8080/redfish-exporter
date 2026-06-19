@@ -74,6 +74,7 @@ modules:
       systems: true
       memory: true
       network: true
+      managers: true
     insecure: false
 ```
 

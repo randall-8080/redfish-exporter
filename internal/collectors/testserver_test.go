@@ -24,6 +24,8 @@ type redfishResponses struct {
 	memoryItem            string
 	ethernetInterfaces    string
 	ethernetInterfaceItem string
+	managers              string
+	managerItem           string
 }
 
 func defaultResponses() redfishResponses {
@@ -32,8 +34,9 @@ func defaultResponses() redfishResponses {
 			"@odata.id": "/redfish/v1/",
 			"Id": "RootService",
 			"Name": "Root Service",
-			"Chassis": {"@odata.id": "/redfish/v1/Chassis"},
-			"Systems": {"@odata.id": "/redfish/v1/Systems"}
+			"Chassis":  {"@odata.id": "/redfish/v1/Chassis"},
+			"Systems":  {"@odata.id": "/redfish/v1/Systems"},
+			"Managers": {"@odata.id": "/redfish/v1/Managers"}
 		}`,
 		chassis: `{
 			"@odata.id": "/redfish/v1/Chassis",
@@ -148,6 +151,20 @@ func defaultResponses() redfishResponses {
 			"LinkStatus": "LinkUp",
 			"Status": {"Health": "OK", "State": "Enabled"}
 		}`,
+		managers: `{
+			"@odata.id": "/redfish/v1/Managers",
+			"Members": [{"@odata.id": "/redfish/v1/Managers/BMC"}],
+			"Members@odata.count": 1
+		}`,
+		managerItem: `{
+			"@odata.id": "/redfish/v1/Managers/BMC",
+			"Id": "BMC",
+			"ManagerType": "BMC",
+			"Model": "TestBMC",
+			"FirmwareVersion": "1.0.0",
+			"Manufacturer": "Acme",
+			"Status": {"Health": "OK", "State": "Enabled"}
+		}`,
 	}
 }
 
@@ -168,6 +185,8 @@ func newTestServer(t *testing.T, r redfishResponses) *httptest.Server {
 		"/redfish/v1/Systems/1/Memory/1":             r.memoryItem,
 		"/redfish/v1/Systems/1/EthernetInterfaces":   r.ethernetInterfaces,
 		"/redfish/v1/Systems/1/EthernetInterfaces/1": r.ethernetInterfaceItem,
+		"/redfish/v1/Managers":                       r.managers,
+		"/redfish/v1/Managers/BMC":                   r.managerItem,
 	}
 	mux := http.NewServeMux()
 	for path, body := range routes {

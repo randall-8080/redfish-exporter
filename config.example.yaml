@@ -9,6 +9,7 @@ modules:
       systems: true
       memory: true
       network: true
+      managers: true
     insecure: true
 
   thermal_only:
@@ -20,4 +21,5 @@ modules:
       systems: false
       memory: false
       network: false
+      managers: false
     insecure: true

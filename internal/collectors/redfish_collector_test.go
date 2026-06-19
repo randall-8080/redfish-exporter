@@ -44,11 +44,12 @@ func TestRedfishCollectorIntegration(t *testing.T) {
 	target := startMockupContainer(t)
 
 	cc := config.CollectorsConfig{
-		Thermal: true,
-		Power:   true,
-		Systems: true,
-		Memory:  true,
-		Network: true,
+		Thermal:  true,
+		Power:    true,
+		Systems:  true,
+		Memory:   true,
+		Network:  true,
+		Managers: true,
 	}
 	redfishClient, err := client.NewClientFromModuleConfig(config.Module{Collectors: cc}, target)
 	require.NoError(t, err, "failed to create Redfish client")
@@ -67,11 +68,11 @@ func TestRedfishCollectorIntegration(t *testing.T) {
 	}
 
 	t.Run("duration metric emitted for every collector", func(t *testing.T) {
-		assert.Equal(t, 5, testutil.CollectAndCount(collector, "redfish_exporter_collector_duration_seconds"))
+		assert.Equal(t, 6, testutil.CollectAndCount(collector, "redfish_exporter_collector_duration_seconds"))
 	})
 
 	t.Run("all collectors report success", func(t *testing.T) {
-		assert.Equal(t, 5, testutil.CollectAndCount(collector, "redfish_collector_success"))
+		assert.Equal(t, 6, testutil.CollectAndCount(collector, "redfish_collector_success"))
 		for _, mf := range mfs {
 			if mf.GetName() != "redfish_collector_success" {
 				continue
@@ -140,6 +141,15 @@ func TestRedfishCollectorIntegration(t *testing.T) {
 			"redfish_network_interface_link_up",
 			"redfish_network_interface_speed_mbps",
 			"redfish_network_interface_health",
+		} {
+			assert.True(t, got[name], "missing metric %s", name)
+		}
+	})
+
+	t.Run("managers", func(t *testing.T) {
+		for _, name := range []string{
+			"redfish_manager_info",
+			"redfish_manager_health",
 		} {
 			assert.True(t, got[name], "missing metric %s", name)
 		}

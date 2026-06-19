@@ -23,11 +23,12 @@ type Auth struct {
 }
 
 type CollectorsConfig struct {
-	Thermal bool `yaml:"thermal"`
-	Power   bool `yaml:"power"`
-	Systems bool `yaml:"systems"`
-	Memory  bool `yaml:"memory"`
-	Network bool `yaml:"network"`
+	Thermal  bool `yaml:"thermal"`
+	Power    bool `yaml:"power"`
+	Systems  bool `yaml:"systems"`
+	Memory   bool `yaml:"memory"`
+	Network  bool `yaml:"network"`
+	Managers bool `yaml:"managers"`
 }
 
 func Load(path string) (*Config, error) {
