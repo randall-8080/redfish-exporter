@@ -1,0 +1,1 @@
+{"@odata.id": "/redfish/v1/Systems/1/Memory/DIMM1", "@odata.type": "#Memory.v1_16_0.Memory", "Id": "DIMM1", "Name": "DIMM 1", "CapacityMiB": 131072, "DeviceLocator": "DIMM_A1", "Status": {"State": "Enabled", "Health": "OK"}}

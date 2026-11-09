@@ -1,0 +1,1 @@
+{"@odata.id": "/redfish/v1/Chassis/1/Sensors/Fan1", "@odata.type": "#Sensor.v1_7_0.Sensor", "Id": "Fan1", "Name": "Fan 1", "ReadingType": "Rotational", "Reading": 2400, "PhysicalContext": "SystemBoard", "Thresholds": {"LowerCritical": {"Reading": 500}}, "Status": {"State": "Enabled", "Health": "OK"}}

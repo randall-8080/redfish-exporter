@@ -1,0 +1,1 @@
+{"@odata.id": "/redfish/v1/Chassis/1/ThermalSubsystem/Fans", "@odata.type": "#FanCollection.FanCollection", "Name": "Fan Collection", "Members": [{"@odata.id": "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/FAN1"}], "Members@odata.count": 1}

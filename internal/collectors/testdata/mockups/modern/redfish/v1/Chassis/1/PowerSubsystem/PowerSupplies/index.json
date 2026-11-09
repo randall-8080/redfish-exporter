@@ -1,0 +1,1 @@
+{"@odata.id": "/redfish/v1/Chassis/1/PowerSubsystem/PowerSupplies", "@odata.type": "#PowerSupplyCollection.PowerSupplyCollection", "Name": "Power Supply Collection", "Members": [{"@odata.id": "/redfish/v1/Chassis/1/PowerSubsystem/PowerSupplies/PSU1"}], "Members@odata.count": 1}

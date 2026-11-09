@@ -1,0 +1,1 @@
+{"@odata.id": "/redfish/v1/Chassis/1/Sensors/CPU1Temp", "@odata.type": "#Sensor.v1_7_0.Sensor", "Id": "CPU1Temp", "Name": "CPU1Temp", "ReadingType": "Temperature", "Reading": 45.5, "PhysicalContext": "CPU", "Thresholds": {"UpperCritical": {"Reading": 85}}, "Status": {"State": "Enabled", "Health": "OK"}}

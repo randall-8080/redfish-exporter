@@ -1,0 +1,1 @@
+{"@odata.id": "/redfish/v1/Chassis/1/EnvironmentMetrics", "@odata.type": "#EnvironmentMetrics.v1_3_0.EnvironmentMetrics", "Id": "EnvironmentMetrics", "Name": "Chassis Environment Metrics", "TemperatureCelsius": {"Reading": 25}, "HumidityPercent": {"Reading": 41}, "PowerWatts": {"Reading": 250, "DataSourceUri": "/redfish/v1/Chassis/1/Sensors/TotalPower"}}

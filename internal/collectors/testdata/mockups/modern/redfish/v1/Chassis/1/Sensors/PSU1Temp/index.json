@@ -1,0 +1,1 @@
+{"@odata.id":"/redfish/v1/Chassis/1/Sensors/PSU1Temp","@odata.type":"#Sensor.v1_7_0.Sensor","Id":"PSU1Temp","Name":"PSU1 Temp","ReadingType":"Temperature","Reading":40,"PhysicalContext":"PowerSupply","Status":{"State":"Enabled","Health":"OK"}}

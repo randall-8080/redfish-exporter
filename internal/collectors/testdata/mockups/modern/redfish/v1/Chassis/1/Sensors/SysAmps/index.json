@@ -1,0 +1,1 @@
+{"@odata.id": "/redfish/v1/Chassis/1/Sensors/SysAmps", "@odata.type": "#Sensor.v1_7_0.Sensor", "Id": "SysAmps", "Name": "System Amps", "ReadingType": "Current", "Reading": 8.2, "PhysicalContext": "SystemBoard", "Status": {"State": "Enabled", "Health": "OK"}}

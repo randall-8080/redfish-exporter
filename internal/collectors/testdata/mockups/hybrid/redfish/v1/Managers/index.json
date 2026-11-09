@@ -1,0 +1,1 @@
+{"@odata.id": "/redfish/v1/Managers", "@odata.type": "#ManagerCollection.ManagerCollection", "Name": "Managers Collection", "Members": [{"@odata.id": "/redfish/v1/Managers/BMC"}], "Members@odata.count": 1}

@@ -1,0 +1,1 @@
+{"@odata.id": "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/FAN1", "@odata.type": "#Fan.v1_3_0.Fan", "Id": "FAN1", "Name": "Fan 1", "PhysicalContext": "SystemBoard", "SpeedPercent": {"Reading": 60, "SpeedRPM": 2400}, "Status": {"State": "Enabled", "Health": "OK"}}

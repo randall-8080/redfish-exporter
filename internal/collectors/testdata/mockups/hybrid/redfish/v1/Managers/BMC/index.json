@@ -1,0 +1,1 @@
+{"@odata.id": "/redfish/v1/Managers/BMC", "@odata.type": "#Manager.v1_15_0.Manager", "Id": "BMC", "Name": "Synthetic BMC", "ManagerType": "BMC", "FirmwareVersion": "synthetic", "Status": {"State": "Enabled", "Health": "OK"}}

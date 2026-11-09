@@ -1,0 +1,1 @@
+{"@odata.id": "/redfish/v1/Chassis/1/Sensors/SysVolt", "@odata.type": "#Sensor.v1_7_0.Sensor", "Id": "SysVolt", "Name": "System Volt", "ReadingType": "Voltage", "Reading": 12.1, "PhysicalContext": "SystemBoard", "Status": {"State": "Enabled", "Health": "OK"}}

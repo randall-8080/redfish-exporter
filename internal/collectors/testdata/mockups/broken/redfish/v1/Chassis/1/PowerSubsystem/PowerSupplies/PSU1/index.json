@@ -1,0 +1,1 @@
+{"@odata.id": "/redfish/v1/Chassis/1/PowerSubsystem/PowerSupplies/PSU1", "@odata.type": "#PowerSupply.v1_5_0.PowerSupply", "Id": "PSU1", "Name": "PSU 1", "PowerSupplyType": "AC", "Status": {"State": "Enabled", "Health": "OK"}, "Metrics": {"@odata.id": "/redfish/v1/Chassis/1/PowerSubsystem/PowerSupplies/PSU1/Metrics"}}
