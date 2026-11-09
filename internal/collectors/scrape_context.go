@@ -14,6 +14,10 @@ import (
 // so that parallel sub-collectors do not fetch the same resource twice. A
 // context is created per Collect call and never reused, so cached data can
 // never go stale.
+//
+// Each resource is cached behind a per-key entry whose fetch runs outside
+// the context lock: callers for the same key share one fetch, while fetches
+// for different keys proceed in parallel.
 type scrapeContext struct {
 	client *gofish.APIClient
 	logger *slog.Logger
@@ -23,26 +27,20 @@ type scrapeContext struct {
 	// by power supply metrics are emitted by the power collector instead.
 	powerEnabled bool
 
-	mu             sync.Mutex
-	chassis        []*schemas.Chassis
-	chassisErr     error
-	chassisFetched bool
-
-	sensors    map[string]*sensorFetch
-	envMetrics map[string]*envMetricsFetch
-	power      map[string]*powerSubsystemFetch
+	mu      sync.Mutex
+	chassis *fetchEntry[[]*schemas.Chassis]
+	sensors map[string]*fetchEntry[[]*schemas.Sensor]
+	env     map[string]*fetchEntry[*schemas.EnvironmentMetrics]
+	power   map[string]*fetchEntry[*powerSubsystemFetch]
 }
 
-// sensorFetch is the cached result of a chassis Sensors collection fetch.
-type sensorFetch struct {
-	sensors []*schemas.Sensor
-	err     error
-}
-
-// envMetricsFetch is the cached result of a chassis EnvironmentMetrics fetch.
-type envMetricsFetch struct {
-	metrics *schemas.EnvironmentMetrics
-	err     error
+// fetchEntry holds the result of a single fetch. The first caller executes
+// do; concurrent callers block until the fetch completes and share its
+// result.
+type fetchEntry[T any] struct {
+	once sync.Once
+	val  T
+	err  error
 }
 
 // powerSubsystemFetch is the cached result of fetching a chassis power
@@ -64,53 +62,55 @@ func newScrapeContext(client *gofish.APIClient, logger *slog.Logger, powerEnable
 	}
 }
 
+// entry returns the cache entry for key, creating it under the context
+// lock. The fetch itself runs outside the lock.
+func entryFor[T any](s *scrapeContext, m *map[string]*fetchEntry[T], key string) *fetchEntry[T] {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if *m == nil {
+		*m = make(map[string]*fetchEntry[T])
+	}
+	e, ok := (*m)[key]
+	if !ok {
+		e = &fetchEntry[T]{}
+		(*m)[key] = e
+	}
+	return e
+}
+
 // Chassis returns the service chassis list, fetching it at most once per
 // scrape. When individual members fail, gofish returns the chassis it could
 // fetch together with an error; both are passed through so callers can still
 // collect from the usable chassis while surfacing the failure.
 func (s *scrapeContext) Chassis() ([]*schemas.Chassis, error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if !s.chassisFetched {
-		s.chassis, s.chassisErr = s.client.Service.Chassis()
-		s.chassisFetched = true
+	e := s.chassis
+	if e == nil {
+		e = &fetchEntry[[]*schemas.Chassis]{}
+		s.chassis = e
 	}
-	return s.chassis, s.chassisErr
+	s.mu.Unlock()
+	e.once.Do(func() { e.val, e.err = s.client.Service.Chassis() })
+	return e.val, e.err
 }
 
-// Sensors returns the chassis sensor collection, fetching it at most once per
-// scrape so the thermal and power collectors share one fetch. Partial
+// Sensors returns the chassis sensor collection, fetching it at most once
+// per scrape so the thermal and power collectors share one fetch. Partial
 // results from a collection with failing members are passed through with
 // their error.
 func (s *scrapeContext) Sensors(chassis *schemas.Chassis) ([]*schemas.Sensor, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.sensors == nil {
-		s.sensors = make(map[string]*sensorFetch)
-	}
-	if f, ok := s.sensors[chassis.ODataID]; ok {
-		return f.sensors, f.err
-	}
-	sensors, err := chassis.Sensors()
-	s.sensors[chassis.ODataID] = &sensorFetch{sensors: sensors, err: err}
-	return sensors, err
+	e := entryFor(s, &s.sensors, chassis.ODataID)
+	e.once.Do(func() { e.val, e.err = chassis.Sensors() })
+	return e.val, e.err
 }
 
 // EnvironmentMetrics returns the chassis EnvironmentMetrics resource,
 // fetching it at most once per scrape so the thermal and power collectors
 // share one fetch.
 func (s *scrapeContext) EnvironmentMetrics(chassis *schemas.Chassis) (*schemas.EnvironmentMetrics, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.envMetrics == nil {
-		s.envMetrics = make(map[string]*envMetricsFetch)
-	}
-	if f, ok := s.envMetrics[chassis.ODataID]; ok {
-		return f.metrics, f.err
-	}
-	metrics, err := chassis.EnvironmentMetrics()
-	s.envMetrics[chassis.ODataID] = &envMetricsFetch{metrics: metrics, err: err}
-	return metrics, err
+	e := entryFor(s, &s.env, chassis.ODataID)
+	e.once.Do(func() { e.val, e.err = chassis.EnvironmentMetrics() })
+	return e.val, e.err
 }
 
 // PowerSubsystem fetches the chassis power subsystem tree once per scrape:
@@ -119,43 +119,38 @@ func (s *scrapeContext) EnvironmentMetrics(chassis *schemas.Chassis) (*schemas.E
 // remain available; a subsystem the service does not implement (no link or
 // 404) yields a nil subsystem without an error.
 func (s *scrapeContext) PowerSubsystem(chassis *schemas.Chassis) (*powerSubsystemFetch, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.power == nil {
-		s.power = make(map[string]*powerSubsystemFetch)
-	}
-	if f, ok := s.power[chassis.ODataID]; ok {
-		return f, f.err
-	}
-	f := &powerSubsystemFetch{metrics: make(map[string]*schemas.PowerSupplyMetrics)}
-	subsystem, err := chassis.PowerSubsystem()
-	switch {
-	case err == nil && subsystem != nil:
-		f.subsystem = subsystem
-		psus, err := subsystem.PowerSupplies()
-		if err != nil {
-			// gofish returns the supplies it could fetch; keep them.
-			f.err = errors.Join(f.err, err)
-		}
-		f.psus = psus
-		for _, psu := range psus {
-			metrics, err := psu.Metrics()
-			if err != nil && !isNotFound(err) {
-				f.err = errors.Join(f.err, fmt.Errorf("power supply %s: %w", psu.ID, err))
+	e := entryFor(s, &s.power, chassis.ODataID)
+	e.once.Do(func() {
+		f := &powerSubsystemFetch{metrics: make(map[string]*schemas.PowerSupplyMetrics)}
+		subsystem, err := chassis.PowerSubsystem()
+		switch {
+		case err == nil && subsystem != nil:
+			f.subsystem = subsystem
+			psus, err := subsystem.PowerSupplies()
+			if err != nil {
+				// gofish returns the supplies it could fetch; keep them.
+				f.err = errors.Join(f.err, err)
 			}
-			if metrics != nil {
-				f.metrics[psu.ODataID] = metrics
+			f.psus = psus
+			for _, psu := range psus {
+				metrics, err := psu.Metrics()
+				if err != nil && !isNotFound(err) {
+					f.err = errors.Join(f.err, fmt.Errorf("power supply %s: %w", psu.ID, err))
+				}
+				if metrics != nil {
+					f.metrics[psu.ODataID] = metrics
+				}
 			}
+		case err == nil:
+			// No PowerSubsystem link; legacy and sensor sources still apply.
+		case isNotFound(err):
+			s.logger.Debug("power subsystem not found", "chassis", chassis.ID)
+		default:
+			f.err = err
 		}
-	case err == nil:
-		// No PowerSubsystem link; legacy and sensor sources still apply.
-	case isNotFound(err):
-		s.logger.Debug("power subsystem not found", "chassis", chassis.ID)
-	default:
-		f.err = err
-	}
-	s.power[chassis.ODataID] = f
-	return f, f.err
+		e.val, e.err = f, f.err
+	})
+	return e.val, e.err
 }
 
 // PSUConsumedTemperatureURIs returns the DataSourceUri set of temperature
