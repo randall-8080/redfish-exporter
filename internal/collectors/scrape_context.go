@@ -1,6 +1,8 @@
 package collectors
 
 import (
+	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 
@@ -28,6 +30,7 @@ type scrapeContext struct {
 
 	sensors    map[string]*sensorFetch
 	envMetrics map[string]*envMetricsFetch
+	power      map[string]*powerSubsystemFetch
 }
 
 // sensorFetch is the cached result of a chassis Sensors collection fetch.
@@ -39,6 +42,17 @@ type sensorFetch struct {
 // envMetricsFetch is the cached result of a chassis EnvironmentMetrics fetch.
 type envMetricsFetch struct {
 	metrics *schemas.EnvironmentMetrics
+	err     error
+}
+
+// powerSubsystemFetch is the cached result of fetching a chassis power
+// subsystem tree: the subsystem, its power supplies, and each supply's
+// metrics resource.
+type powerSubsystemFetch struct {
+	subsystem *schemas.PowerSubsystem
+	psus      []*schemas.PowerSupplyUnit
+	// metrics maps a power supply's ODataID to its metrics resource.
+	metrics map[string]*schemas.PowerSupplyMetrics
 	err     error
 }
 
@@ -97,4 +111,74 @@ func (s *scrapeContext) EnvironmentMetrics(chassis *schemas.Chassis) (*schemas.E
 	metrics, err := chassis.EnvironmentMetrics()
 	s.envMetrics[chassis.ODataID] = &envMetricsFetch{metrics: metrics, err: err}
 	return metrics, err
+}
+
+// PowerSubsystem fetches the chassis power subsystem tree once per scrape:
+// the subsystem, its power supplies, and each supply's metrics resource.
+// Fetch failures are joined into the returned error while the fetched parts
+// remain available; a subsystem the service does not implement (no link or
+// 404) yields a nil subsystem without an error.
+func (s *scrapeContext) PowerSubsystem(chassis *schemas.Chassis) (*powerSubsystemFetch, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.power == nil {
+		s.power = make(map[string]*powerSubsystemFetch)
+	}
+	if f, ok := s.power[chassis.ODataID]; ok {
+		return f, f.err
+	}
+	f := &powerSubsystemFetch{metrics: make(map[string]*schemas.PowerSupplyMetrics)}
+	subsystem, err := chassis.PowerSubsystem()
+	switch {
+	case err == nil && subsystem != nil:
+		f.subsystem = subsystem
+		psus, err := subsystem.PowerSupplies()
+		if err != nil {
+			// gofish returns the supplies it could fetch; keep them.
+			f.err = errors.Join(f.err, err)
+		}
+		f.psus = psus
+		for _, psu := range psus {
+			metrics, err := psu.Metrics()
+			if err != nil && !isNotFound(err) {
+				f.err = errors.Join(f.err, fmt.Errorf("power supply %s: %w", psu.ID, err))
+			}
+			if metrics != nil {
+				f.metrics[psu.ODataID] = metrics
+			}
+		}
+	case err == nil:
+		// No PowerSubsystem link; legacy and sensor sources still apply.
+	case isNotFound(err):
+		s.logger.Debug("power subsystem not found", "chassis", chassis.ID)
+	default:
+		f.err = err
+	}
+	s.power[chassis.ODataID] = f
+	return f, f.err
+}
+
+// PSUConsumedTemperatureURIs returns the DataSourceUri set of temperature
+// sensors that power supply metrics report as
+// redfish_power_supply_temperature_celsius. The thermal collector uses it to
+// avoid emitting the same reading as a chassis temperature; it is only
+// meaningful when the power collector runs in this scrape.
+func (s *scrapeContext) PSUConsumedTemperatureURIs(chassis *schemas.Chassis) map[string]bool {
+	f, _ := s.PowerSubsystem(chassis)
+	uris := make(map[string]bool)
+	// Mirror the power collector: absent supplies report nothing, so their
+	// sensors stay available to the temperature family.
+	for _, psu := range f.psus {
+		if psu.Status.State == schemas.AbsentState {
+			continue
+		}
+		m := f.metrics[psu.ODataID]
+		if m == nil {
+			continue
+		}
+		if m.TemperatureCelsius.Reading != nil && m.TemperatureCelsius.DataSourceURI != "" {
+			uris[m.TemperatureCelsius.DataSourceURI] = true
+		}
+	}
+	return uris
 }

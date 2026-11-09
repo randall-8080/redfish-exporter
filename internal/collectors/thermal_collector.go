@@ -29,7 +29,6 @@ type ThermalCollector struct {
 }
 
 func NewThermalCollector(target string, client *gofish.APIClient, logger *slog.Logger) *ThermalCollector {
-
 	thermalBaseLabels := []string{"chassis_id"}
 
 	return &ThermalCollector{
@@ -113,15 +112,15 @@ func (c *ThermalCollector) Collect(ch chan<- prometheus.Metric) {
 // collect walks all chassis and reports an error when any resource fetch
 // failed; metrics collected from the remaining resources are still emitted.
 func (c *ThermalCollector) collect(ctx *scrapeContext, ch chan<- prometheus.Metric) error {
-	chassies, err := ctx.Chassis()
+	chassisList, err := ctx.Chassis()
 	if err != nil {
-		c.logger.Error("failed to get chassis", "error", err, "fetched", len(chassies), "target", c.target)
-		if len(chassies) == 0 {
+		c.logger.Error("failed to get chassis", "error", err, "fetched", len(chassisList), "target", c.target)
+		if len(chassisList) == 0 {
 			return fmt.Errorf("get chassis: %w", err)
 		}
 	}
 	errs := []error{err}
-	for _, chassis := range chassies {
+	for _, chassis := range chassisList {
 		if cerr := c.collectChassis(ctx, chassis, ch); cerr != nil {
 			errs = append(errs, cerr)
 		}
@@ -218,13 +217,18 @@ func (c *ThermalCollector) collectChassis(ctx *scrapeContext, chassis *schemas.C
 	}
 
 	// Temperature readings: sensors → thermal metrics excerpts → environment
-	// metrics excerpt → legacy Thermal.
-	temps := temperatureSamplesFromSensors(tempSensors)
+	// metrics excerpt → legacy Thermal. Readings reported by the power
+	// collector as power supply temperatures are skipped.
+	var psuConsumed map[string]bool
+	if ctx.powerEnabled {
+		psuConsumed = ctx.PSUConsumedTemperatureURIs(chassis)
+	}
+	temps := temperatureSamplesFromSensors(tempSensors, psuConsumed)
 	if len(temps) == 0 {
-		temps = temperatureSamplesFromThermalMetrics(thermalMetrics, sensorsByURI)
+		temps = temperatureSamplesFromThermalMetrics(thermalMetrics, sensorsByURI, psuConsumed)
 	}
 	if len(temps) == 0 {
-		temps = temperatureSamplesFromEnvironment(envMetrics, sensorsByURI)
+		temps = temperatureSamplesFromEnvironment(envMetrics, sensorsByURI, psuConsumed)
 	}
 	if len(temps) == 0 {
 		temps = temperatureSamplesFromLegacy(legacyThermal)
@@ -385,10 +389,13 @@ func uniqueLabel(seen map[string]string, name, id string) (string, bool) {
 // temperatureSamplesFromSensors builds samples from Temperature-type sensor
 // resources. Disabled and absent sensors and sensors without a reading are
 // skipped; real zero and negative readings are preserved.
-func temperatureSamplesFromSensors(sensors []*schemas.Sensor) []temperatureSample {
+func temperatureSamplesFromSensors(sensors []*schemas.Sensor, skip map[string]bool) []temperatureSample {
 	var out []temperatureSample
 	for _, s := range sensors {
 		if s.Reading == nil || s.Status.State == schemas.DisabledState || s.Status.State == schemas.AbsentState {
+			continue
+		}
+		if skip[s.ODataID] {
 			continue
 		}
 		out = append(out, temperatureSample{
@@ -409,7 +416,7 @@ func temperatureSamplesFromSensors(sensors []*schemas.Sensor) []temperatureSampl
 // excerpt already emitted are skipped; summary readings without a link are
 // skipped when the readings list already produced samples, since they
 // summarize the same sensors.
-func temperatureSamplesFromThermalMetrics(m *schemas.ThermalMetrics, sensorsByURI map[string]*schemas.Sensor) []temperatureSample {
+func temperatureSamplesFromThermalMetrics(m *schemas.ThermalMetrics, sensorsByURI map[string]*schemas.Sensor, skip map[string]bool) []temperatureSample {
 	if m == nil {
 		return nil
 	}
@@ -419,7 +426,7 @@ func temperatureSamplesFromThermalMetrics(m *schemas.ThermalMetrics, sensorsByUR
 		if tr.Reading == nil {
 			continue
 		}
-		if tr.DataSourceURI != "" && emitted[tr.DataSourceURI] {
+		if tr.DataSourceURI != "" && (emitted[tr.DataSourceURI] || skip[tr.DataSourceURI]) {
 			continue
 		}
 		sensor, id := excerptName(tr.DeviceName, tr.DataSourceURI, sensorsByURI)
@@ -449,7 +456,7 @@ func temperatureSamplesFromThermalMetrics(m *schemas.ThermalMetrics, sensorsByUR
 		if role.excerpt.Reading == nil {
 			continue
 		}
-		if role.excerpt.DataSourceURI != "" && emitted[role.excerpt.DataSourceURI] {
+		if role.excerpt.DataSourceURI != "" && (emitted[role.excerpt.DataSourceURI] || skip[role.excerpt.DataSourceURI]) {
 			continue
 		}
 		if role.excerpt.DataSourceURI == "" && readingsYielded {
@@ -471,7 +478,7 @@ func temperatureSamplesFromThermalMetrics(m *schemas.ThermalMetrics, sensorsByUR
 // temperatureSamplesFromEnvironment builds a sample from the chassis
 // EnvironmentMetrics temperature excerpt. TemperatureCelsius is preferred;
 // newer services that deprecated it report AmbientTemperatureCelsius.
-func temperatureSamplesFromEnvironment(e *schemas.EnvironmentMetrics, sensorsByURI map[string]*schemas.Sensor) []temperatureSample {
+func temperatureSamplesFromEnvironment(e *schemas.EnvironmentMetrics, sensorsByURI map[string]*schemas.Sensor, skip map[string]bool) []temperatureSample {
 	if e == nil {
 		return nil
 	}
@@ -479,7 +486,7 @@ func temperatureSamplesFromEnvironment(e *schemas.EnvironmentMetrics, sensorsByU
 	if excerpt.Reading == nil {
 		excerpt = e.AmbientTemperatureCelsius
 	}
-	if excerpt.Reading == nil {
+	if excerpt.Reading == nil || skip[excerpt.DataSourceURI] {
 		return nil
 	}
 	sensor, id := excerptName("EnvironmentMetrics", excerpt.DataSourceURI, sensorsByURI)
