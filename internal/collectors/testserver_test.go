@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/stmcginnis/gofish"
 	"github.com/stretchr/testify/require"
 )
@@ -31,6 +33,10 @@ type redfishResponses struct {
 	// simulating missing (404), unauthorized (401), failing (5xx), or
 	// malformed resources.
 	overrides map[string]routeOverride
+
+	// extraRoutes serves additional JSON resources with status 200, e.g.
+	// modern Redfish resources or additional chassis.
+	extraRoutes map[string]string
 }
 
 // routeOverride describes a canned non-default response for one path.
@@ -199,6 +205,9 @@ func newTestServer(t *testing.T, r redfishResponses) *httptest.Server {
 		"/redfish/v1/Managers":                       jsonHandler(r.managers),
 		"/redfish/v1/Managers/BMC":                   jsonHandler(r.managerItem),
 	}
+	for path, body := range r.extraRoutes {
+		handlers[path] = jsonHandler(body)
+	}
 	for path, o := range r.overrides {
 		status, body := o.status, o.body
 		handlers[path] = func(w http.ResponseWriter, _ *http.Request) {
@@ -233,4 +242,52 @@ func newTestGoFishClient(t *testing.T, serverURL string) *gofish.APIClient {
 	require.NoError(t, err)
 	t.Cleanup(func() { client.Logout() })
 	return client
+}
+
+// gatherFamilies collects c through a fresh pedantic registry and returns the
+// metric families keyed by name. Duplicate series and inconsistent metrics
+// make the registry Gather fail, so a successful call proves the output is
+// free of duplicate samples.
+func gatherFamilies(t *testing.T, c prometheus.Collector) map[string]*dto.MetricFamily {
+	t.Helper()
+	reg := prometheus.NewPedanticRegistry()
+	require.NoError(t, reg.Register(c))
+	families, err := reg.Gather()
+	require.NoError(t, err)
+	out := make(map[string]*dto.MetricFamily, len(families))
+	for _, f := range families {
+		out[f.GetName()] = f
+	}
+	return out
+}
+
+// findMetric returns the metric in the family whose labels match want
+// exactly, or nil when no such metric exists.
+func findMetric(f *dto.MetricFamily, want map[string]string) *dto.Metric {
+	if f == nil {
+		return nil
+	}
+	for _, m := range f.GetMetric() {
+		if metricLabelsMatch(m, want) {
+			return m
+		}
+	}
+	return nil
+}
+
+// metricLabelsMatch reports whether the metric's labels match want exactly.
+func metricLabelsMatch(m *dto.Metric, want map[string]string) bool {
+	labels := make(map[string]string, len(m.GetLabel()))
+	for _, lp := range m.GetLabel() {
+		labels[lp.GetName()] = lp.GetValue()
+	}
+	if len(labels) != len(want) {
+		return false
+	}
+	for k, v := range want {
+		if labels[k] != v {
+			return false
+		}
+	}
+	return true
 }

@@ -25,6 +25,21 @@ type scrapeContext struct {
 	chassis        []*schemas.Chassis
 	chassisErr     error
 	chassisFetched bool
+
+	sensors    map[string]*sensorFetch
+	envMetrics map[string]*envMetricsFetch
+}
+
+// sensorFetch is the cached result of a chassis Sensors collection fetch.
+type sensorFetch struct {
+	sensors []*schemas.Sensor
+	err     error
+}
+
+// envMetricsFetch is the cached result of a chassis EnvironmentMetrics fetch.
+type envMetricsFetch struct {
+	metrics *schemas.EnvironmentMetrics
+	err     error
 }
 
 func newScrapeContext(client *gofish.APIClient, logger *slog.Logger, powerEnabled bool) *scrapeContext {
@@ -47,4 +62,39 @@ func (s *scrapeContext) Chassis() ([]*schemas.Chassis, error) {
 		s.chassisFetched = true
 	}
 	return s.chassis, s.chassisErr
+}
+
+// Sensors returns the chassis sensor collection, fetching it at most once per
+// scrape so the thermal and power collectors share one fetch. Partial
+// results from a collection with failing members are passed through with
+// their error.
+func (s *scrapeContext) Sensors(chassis *schemas.Chassis) ([]*schemas.Sensor, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.sensors == nil {
+		s.sensors = make(map[string]*sensorFetch)
+	}
+	if f, ok := s.sensors[chassis.ODataID]; ok {
+		return f.sensors, f.err
+	}
+	sensors, err := chassis.Sensors()
+	s.sensors[chassis.ODataID] = &sensorFetch{sensors: sensors, err: err}
+	return sensors, err
+}
+
+// EnvironmentMetrics returns the chassis EnvironmentMetrics resource,
+// fetching it at most once per scrape so the thermal and power collectors
+// share one fetch.
+func (s *scrapeContext) EnvironmentMetrics(chassis *schemas.Chassis) (*schemas.EnvironmentMetrics, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.envMetrics == nil {
+		s.envMetrics = make(map[string]*envMetricsFetch)
+	}
+	if f, ok := s.envMetrics[chassis.ODataID]; ok {
+		return f.metrics, f.err
+	}
+	metrics, err := chassis.EnvironmentMetrics()
+	s.envMetrics[chassis.ODataID] = &envMetricsFetch{metrics: metrics, err: err}
+	return metrics, err
 }
