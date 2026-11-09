@@ -80,3 +80,19 @@ func TestMemoryCollector_Collect_FallsBackToIDWhenLocatorMissing(t *testing.T) {
 	// DeviceLocator empty → falls back to ID; metrics still emitted normally
 	assert.Equal(t, 2, testutil.CollectAndCount(c))
 }
+
+func TestMemoryCollector_Collect_SkipsNilCapacity(t *testing.T) {
+	r := defaultResponses()
+	r.memoryItem = `{
+		"@odata.id": "/redfish/v1/Systems/1/Memory/1",
+		"Id": "1",
+		"DeviceLocator": "DIMM_A1",
+		"Status": {"Health": "OK", "State": "Enabled"}
+	}`
+	srv := newTestServer(t, r)
+	defer srv.Close()
+	c := NewMemoryCollector(srv.URL, newTestGoFishClient(t, srv.URL), discardLogger())
+
+	// CapacityMiB absent → capacity skipped; enabled module still emits health
+	assert.Equal(t, 1, testutil.CollectAndCount(c))
+}

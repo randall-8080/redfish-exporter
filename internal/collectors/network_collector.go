@@ -6,8 +6,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stmcginnis/gofish"
-	"github.com/stmcginnis/gofish/common"
-	"github.com/stmcginnis/gofish/redfish"
+	"github.com/stmcginnis/gofish/schemas"
 )
 
 type NetworkCollector struct {
@@ -94,12 +93,12 @@ func (c *NetworkCollector) collectEthernetInterfaces(ch chan<- prometheus.Metric
 			continue
 		}
 		for _, nic := range nics {
-			if nic.Status.State == common.AbsentState {
+			if nic.Status.State == schemas.AbsentState {
 				c.logger.Debug("skipping ethernet interface: absent", "interface", nic.ID, "system", system.ID, "target", c.target)
 				continue
 			}
 			linkUp := 0.0
-			if nic.LinkStatus == redfish.LinkUpLinkStatus {
+			if nic.LinkStatus == schemas.LinkUpLinkStatus {
 				linkUp = 1.0
 			}
 			ch <- prometheus.MustNewConstMetric(
@@ -108,15 +107,15 @@ func (c *NetworkCollector) collectEthernetInterfaces(ch chan<- prometheus.Metric
 				linkUp,
 				system.ID, nic.ID, nic.MACAddress,
 			)
-			if nic.SpeedMbps > 0 {
+			if nic.SpeedMbps != nil && *nic.SpeedMbps > 0 {
 				ch <- prometheus.MustNewConstMetric(
 					c.ifSpeedDesc,
 					prometheus.GaugeValue,
-					float64(nic.SpeedMbps),
+					float64(*nic.SpeedMbps),
 					system.ID, nic.ID, nic.MACAddress,
 				)
 			}
-			if nic.Status.State == common.EnabledState && nic.Status.Health != "" {
+			if nic.Status.State == schemas.EnabledState && nic.Status.Health != "" {
 				ch <- prometheus.MustNewConstMetric(
 					c.ifHealthDesc,
 					prometheus.GaugeValue,

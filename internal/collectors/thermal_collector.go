@@ -6,7 +6,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stmcginnis/gofish"
-	"github.com/stmcginnis/gofish/common"
+	"github.com/stmcginnis/gofish/schemas"
 )
 
 type ThermalCollector struct {
@@ -83,7 +83,7 @@ func (c *ThermalCollector) collect(ch chan<- prometheus.Metric) error {
 		// Export temperature readings and status
 		for _, t := range thermal.Temperatures {
 			// Skip disabled or absent sensors
-			if t.Status.State == common.DisabledState || t.Status.State == common.AbsentState {
+			if t.Status.State == schemas.DisabledState || t.Status.State == schemas.AbsentState {
 				c.logger.Debug("skipping temperature sensor", "sensor", t.Name, "state", t.Status.State, "chassis", chassis.ID, "target", c.target)
 				continue
 			}
@@ -91,10 +91,7 @@ func (c *ThermalCollector) collect(ch chan<- prometheus.Metric) error {
 				c.logger.Debug("skipping temperature sensor: no reading", "sensor", t.Name, "chassis", chassis.ID, "target", c.target)
 				continue
 			}
-			physicalContext := ""
-			if t.PhysicalContext != nil {
-				physicalContext = string(*t.PhysicalContext)
-			}
+			physicalContext := string(t.PhysicalContext)
 			ch <- prometheus.MustNewConstMetric(
 				c.tempDesc,
 				prometheus.GaugeValue,
@@ -103,7 +100,7 @@ func (c *ThermalCollector) collect(ch chan<- prometheus.Metric) error {
 			)
 
 			// Export temperature status as a one-hot metric (1=OK, 0=not OK)
-			if t.Status.State == common.EnabledState {
+			if t.Status.State == schemas.EnabledState {
 				ch <- prometheus.MustNewConstMetric(
 					c.tempStatusDesc,
 					prometheus.GaugeValue,
@@ -115,7 +112,7 @@ func (c *ThermalCollector) collect(ch chan<- prometheus.Metric) error {
 
 		// Export fan status metrics
 		for _, f := range thermal.Fans {
-			if f.Status.State == common.AbsentState {
+			if f.Status.State == schemas.AbsentState {
 				c.logger.Debug("skipping fan: absent", "fan", f.Name, "chassis", chassis.ID, "target", c.target)
 				continue
 			}
@@ -123,10 +120,7 @@ func (c *ThermalCollector) collect(ch chan<- prometheus.Metric) error {
 				c.logger.Debug("skipping unnamed fan", "chassis", chassis.ID, "target", c.target)
 				continue
 			}
-			physicalContext := ""
-			if f.PhysicalContext != nil {
-				physicalContext = string(*f.PhysicalContext)
-			}
+			physicalContext := string(f.PhysicalContext)
 			if f.Reading == nil {
 				c.logger.Debug("fan has no RPM reading", "fan", f.Name, "chassis", chassis.ID, "target", c.target)
 			} else {
@@ -138,7 +132,7 @@ func (c *ThermalCollector) collect(ch chan<- prometheus.Metric) error {
 				)
 			}
 			// Health is independent of reading availability — a fan can be Critical with no RPM data
-			if f.Status.State == common.EnabledState {
+			if f.Status.State == schemas.EnabledState {
 				ch <- prometheus.MustNewConstMetric(
 					c.fanStatusDesc,
 					prometheus.GaugeValue,

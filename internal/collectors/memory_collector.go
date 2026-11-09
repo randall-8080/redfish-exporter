@@ -6,7 +6,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stmcginnis/gofish"
-	"github.com/stmcginnis/gofish/common"
+	"github.com/stmcginnis/gofish/schemas"
 )
 
 type MemoryCollector struct {
@@ -66,27 +66,31 @@ func (c *MemoryCollector) collect(ch chan<- prometheus.Metric) error {
 		}
 
 		for _, mem := range memory {
-			if mem.Status.State == common.AbsentState || mem.Status.State == common.DisabledState {
+			if mem.Status.State == schemas.AbsentState || mem.Status.State == schemas.DisabledState {
 				c.logger.Debug("skipping memory module", "memory_id", mem.ID, "state", mem.Status.State, "system", system.ID, "target", c.target)
 				continue
 			}
 
-			// Determine memory location (socket/slot info)
-			memLocation := mem.DeviceLocator
+			// Deprecated, but the most widely populated location field.
+			memLocation := mem.DeviceLocator //nolint:staticcheck // SA1019
 			if memLocation == "" {
 				memLocation = mem.ID
 			}
 
 			// Export capacity metric
-			ch <- prometheus.MustNewConstMetric(
-				c.memoryCapacityDesc,
-				prometheus.GaugeValue,
-				float64(mem.CapacityMiB),
-				system.ID, mem.ID, memLocation,
-			)
+			if mem.CapacityMiB != nil {
+				ch <- prometheus.MustNewConstMetric(
+					c.memoryCapacityDesc,
+					prometheus.GaugeValue,
+					float64(*mem.CapacityMiB),
+					system.ID, mem.ID, memLocation,
+				)
+			} else {
+				c.logger.Debug("skipping memory capacity: not reported", "memory_id", mem.ID, "system", system.ID, "target", c.target)
+			}
 
 			// Export health status metric
-			if mem.Status.State == common.EnabledState {
+			if mem.Status.State == schemas.EnabledState {
 				ch <- prometheus.MustNewConstMetric(
 					c.memoryStatusDesc,
 					prometheus.GaugeValue,

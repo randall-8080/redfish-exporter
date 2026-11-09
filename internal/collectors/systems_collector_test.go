@@ -85,3 +85,31 @@ func TestSystemsCollector_Collect_ProcessorAndMemorySummary(t *testing.T) {
 	// + memory_gib(1) + memory_health(1) + memory_health_rollup(1) = 8
 	assert.Equal(t, 8, testutil.CollectAndCount(c))
 }
+
+func TestSystemsCollector_Collect_SkipsNilSummaryValues(t *testing.T) {
+	r := defaultResponses()
+	r.systemItem = `{
+		"@odata.id": "/redfish/v1/Systems/1",
+		"Id": "1",
+		"SerialNumber": "SN123",
+		"Manufacturer": "Supermicro",
+		"Model": "Super Server",
+		"Status": {"State": "Enabled", "Health": "OK"},
+		"ProcessorSummary": {
+			"Status": {"State": "Enabled", "Health": "OK", "HealthRollup": "OK"}
+		},
+		"MemorySummary": {
+			"Status": {"State": "Enabled", "Health": "OK", "HealthRollup": "OK"}
+		},
+		"Memory": {"@odata.id": "/redfish/v1/Systems/1/Memory"}
+	}`
+	srv := newTestServer(t, r)
+	defer srv.Close()
+	c := NewSystemsCollector(srv.URL, newTestGoFishClient(t, srv.URL), discardLogger())
+
+	// Count and TotalSystemMemoryGiB absent → processor_count and memory_gib skipped;
+	// summary health metrics still emitted: system_info(1) + system_health(1)
+	// + processor_health(1) + processor_health_rollup(1)
+	// + memory_health(1) + memory_health_rollup(1) = 6
+	assert.Equal(t, 6, testutil.CollectAndCount(c))
+}

@@ -34,6 +34,23 @@ func TestNetworkCollector_Collect_LinkDown(t *testing.T) {
 	assert.Equal(t, 3, testutil.CollectAndCount(c))
 }
 
+func TestNetworkCollector_Collect_NilSpeedSkipped(t *testing.T) {
+	r := defaultResponses()
+	r.ethernetInterfaceItem = `{
+		"@odata.id": "/redfish/v1/Systems/1/EthernetInterfaces/1",
+		"Id": "1",
+		"MACAddress": "AA:BB:CC:DD:EE:FF",
+		"LinkStatus": "LinkUp",
+		"Status": {"Health": "OK", "State": "Enabled"}
+	}`
+	srv := newTestServer(t, r)
+	defer srv.Close()
+	c := NewNetworkCollector(srv.URL, newTestGoFishClient(t, srv.URL), discardLogger())
+
+	// SpeedMbps absent → speed skipped; link_up(1) + interface_health(1) + adapter_health(1) = 3
+	assert.Equal(t, 3, testutil.CollectAndCount(c))
+}
+
 func TestNetworkCollector_Collect_SkipsAbsentInterface(t *testing.T) {
 	r := defaultResponses()
 	r.ethernetInterfaceItem = `{

@@ -7,7 +7,7 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/common v0.69.0
 	github.com/prometheus/exporter-toolkit v0.16.0
-	github.com/stmcginnis/gofish v0.20.1-0.20251211143545-ec5fd02a9e42 // v0.22.0 dropped redfish/common subpackages — migration pending
+	github.com/stmcginnis/gofish v0.27.1-0.20261102172810-28ea337674fc // pinned to main until post-v0.27.0 fixes are tagged
 	gopkg.in/yaml.v3 v3.0.1
 )
 

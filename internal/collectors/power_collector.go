@@ -6,7 +6,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stmcginnis/gofish"
-	"github.com/stmcginnis/gofish/redfish"
+	"github.com/stmcginnis/gofish/schemas"
 )
 
 type PowerCollector struct {
@@ -139,7 +139,7 @@ func (c *PowerCollector) collect(ch chan<- prometheus.Metric) error {
 	}
 	for _, chassis := range chassies {
 		powerState := 0.0
-		if chassis.PowerState == redfish.OnPowerState {
+		if chassis.PowerState == schemas.OnPowerState {
 			powerState = 1.0
 		}
 		ch <- prometheus.MustNewConstMetric(
@@ -196,31 +196,29 @@ func (c *PowerCollector) collect(ch chan<- prometheus.Metric) error {
 					chassis.ID, pc.Name, pc.MemberID,
 				)
 			}
-			if pc.PowerMetrics != nil {
-				if pc.PowerMetrics.AverageConsumedWatts != nil {
-					ch <- prometheus.MustNewConstMetric(
-						c.powerAverageConsumedDesc,
-						prometheus.GaugeValue,
-						float64(*pc.PowerMetrics.AverageConsumedWatts),
-						chassis.ID, pc.Name, pc.MemberID,
-					)
-				}
-				if pc.PowerMetrics.MaxConsumedWatts != nil {
-					ch <- prometheus.MustNewConstMetric(
-						c.powerMaxConsumedDesc,
-						prometheus.GaugeValue,
-						float64(*pc.PowerMetrics.MaxConsumedWatts),
-						chassis.ID, pc.Name, pc.MemberID,
-					)
-				}
-				if pc.PowerMetrics.MinConsumedWatts != nil {
-					ch <- prometheus.MustNewConstMetric(
-						c.powerMinConsumedDesc,
-						prometheus.GaugeValue,
-						float64(*pc.PowerMetrics.MinConsumedWatts),
-						chassis.ID, pc.Name, pc.MemberID,
-					)
-				}
+			if pc.PowerMetrics.AverageConsumedWatts != nil {
+				ch <- prometheus.MustNewConstMetric(
+					c.powerAverageConsumedDesc,
+					prometheus.GaugeValue,
+					float64(*pc.PowerMetrics.AverageConsumedWatts),
+					chassis.ID, pc.Name, pc.MemberID,
+				)
+			}
+			if pc.PowerMetrics.MaxConsumedWatts != nil {
+				ch <- prometheus.MustNewConstMetric(
+					c.powerMaxConsumedDesc,
+					prometheus.GaugeValue,
+					float64(*pc.PowerMetrics.MaxConsumedWatts),
+					chassis.ID, pc.Name, pc.MemberID,
+				)
+			}
+			if pc.PowerMetrics.MinConsumedWatts != nil {
+				ch <- prometheus.MustNewConstMetric(
+					c.powerMinConsumedDesc,
+					prometheus.GaugeValue,
+					float64(*pc.PowerMetrics.MinConsumedWatts),
+					chassis.ID, pc.Name, pc.MemberID,
+				)
 			}
 		}
 

@@ -139,54 +139,59 @@ func (c *SystemsCollector) collect(ch chan<- prometheus.Metric) error {
 		}
 
 		ps := system.ProcessorSummary
-		if ps.Count > 0 {
+		if ps.Count != nil {
 			ch <- prometheus.MustNewConstMetric(
 				c.processorCountDesc,
 				prometheus.GaugeValue,
-				float64(ps.Count),
+				float64(*ps.Count),
 				system.ID,
 			)
 		}
-		if ps.Status.Health != "" {
+		// Summary Status is deprecated in favor of Conditions, but remains
+		// the only summary health source most BMCs implement.
+		processorStatus := ps.Status //nolint:staticcheck // SA1019
+		if processorStatus.Health != "" {
 			ch <- prometheus.MustNewConstMetric(
 				c.processorHealthDesc,
 				prometheus.GaugeValue,
-				healthToFloat(ps.Status.Health),
-				system.ID, string(ps.Status.Health),
+				healthToFloat(processorStatus.Health),
+				system.ID, string(processorStatus.Health),
 			)
 		}
-		if ps.Status.HealthRollup != "" {
+		if processorStatus.HealthRollup != "" {
 			ch <- prometheus.MustNewConstMetric(
 				c.processorHealthRollupDesc,
 				prometheus.GaugeValue,
-				healthToFloat(ps.Status.HealthRollup),
-				system.ID, string(ps.Status.HealthRollup),
+				healthToFloat(processorStatus.HealthRollup),
+				system.ID, string(processorStatus.HealthRollup),
 			)
 		}
 
 		ms := system.MemorySummary
-		if ms.TotalSystemMemoryGiB > 0 {
+		if ms.TotalSystemMemoryGiB != nil {
 			ch <- prometheus.MustNewConstMetric(
 				c.memoryGiBDesc,
 				prometheus.GaugeValue,
-				float64(ms.TotalSystemMemoryGiB),
+				float64(*ms.TotalSystemMemoryGiB),
 				system.ID,
 			)
 		}
-		if ms.Status.Health != "" {
+		// Deprecated, see above.
+		memoryStatus := ms.Status //nolint:staticcheck // SA1019
+		if memoryStatus.Health != "" {
 			ch <- prometheus.MustNewConstMetric(
 				c.memoryHealthDesc,
 				prometheus.GaugeValue,
-				healthToFloat(ms.Status.Health),
-				system.ID, string(ms.Status.Health),
+				healthToFloat(memoryStatus.Health),
+				system.ID, string(memoryStatus.Health),
 			)
 		}
-		if ms.Status.HealthRollup != "" {
+		if memoryStatus.HealthRollup != "" {
 			ch <- prometheus.MustNewConstMetric(
 				c.memoryHealthRollupDesc,
 				prometheus.GaugeValue,
-				healthToFloat(ms.Status.HealthRollup),
-				system.ID, string(ms.Status.HealthRollup),
+				healthToFloat(memoryStatus.HealthRollup),
+				system.ID, string(memoryStatus.HealthRollup),
 			)
 		}
 	}

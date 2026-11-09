@@ -107,7 +107,7 @@ The test skips automatically if those env vars are unset. `hack/.gitignore` has 
 ## Key Dependencies
 
 ```
-github.com/stmcginnis/gofish           — Redfish client library (pinned to untagged commit)
+github.com/stmcginnis/gofish           — Redfish client library (pinned to untagged main commit; schema types live in the `gofish/schemas` package since v0.22.0)
 github.com/prometheus/client_golang    — Prometheus metrics
 github.com/prometheus/exporter-toolkit — TLS, auth, landing page
 github.com/alecthomas/kingpin/v2       — CLI flags
