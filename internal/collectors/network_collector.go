@@ -67,9 +67,13 @@ func (c *NetworkCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 // Collect satisfies prometheus.Collector; use redfish_collector_success to detect failures.
-func (c *NetworkCollector) Collect(ch chan<- prometheus.Metric) { _ = c.collect(ch) }
+// Collect satisfies prometheus.Collector; use redfish_collector_success to detect failures.
+// When run standalone it creates its own scrape context.
+func (c *NetworkCollector) Collect(ch chan<- prometheus.Metric) {
+	_ = c.collect(newScrapeContext(c.client, c.logger, false), ch)
+}
 
-func (c *NetworkCollector) collect(ch chan<- prometheus.Metric) error {
+func (c *NetworkCollector) collect(_ *scrapeContext, ch chan<- prometheus.Metric) error {
 	var firstErr error
 	if err := c.collectEthernetInterfaces(ch); err != nil {
 		firstErr = err

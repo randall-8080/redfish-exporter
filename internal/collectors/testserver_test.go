@@ -26,6 +26,17 @@ type redfishResponses struct {
 	ethernetInterfaceItem string
 	managers              string
 	managerItem           string
+
+	// overrides replaces the handler for a path with a fixed status and body,
+	// simulating missing (404), unauthorized (401), failing (5xx), or
+	// malformed resources.
+	overrides map[string]routeOverride
+}
+
+// routeOverride describes a canned non-default response for one path.
+type routeOverride struct {
+	status int
+	body   string
 }
 
 func defaultResponses() redfishResponses {
@@ -171,32 +182,48 @@ func defaultResponses() redfishResponses {
 // newTestServer starts an httptest.Server that serves the given Redfish JSON responses.
 func newTestServer(t *testing.T, r redfishResponses) *httptest.Server {
 	t.Helper()
-	routes := map[string]string{
-		"/redfish/v1/":                               r.serviceRoot,
-		"/redfish/v1/Chassis":                        r.chassis,
-		"/redfish/v1/Chassis/1":                      r.chassisItem,
-		"/redfish/v1/Chassis/1/Power":                r.power,
-		"/redfish/v1/Chassis/1/Thermal":              r.thermal,
-		"/redfish/v1/Chassis/1/NetworkAdapters":      r.networkAdapters,
-		"/redfish/v1/Chassis/1/NetworkAdapters/1":    r.networkAdapterItem,
-		"/redfish/v1/Systems":                        r.systems,
-		"/redfish/v1/Systems/1":                      r.systemItem,
-		"/redfish/v1/Systems/1/Memory":               r.memory,
-		"/redfish/v1/Systems/1/Memory/1":             r.memoryItem,
-		"/redfish/v1/Systems/1/EthernetInterfaces":   r.ethernetInterfaces,
-		"/redfish/v1/Systems/1/EthernetInterfaces/1": r.ethernetInterfaceItem,
-		"/redfish/v1/Managers":                       r.managers,
-		"/redfish/v1/Managers/BMC":                   r.managerItem,
+	handlers := map[string]http.HandlerFunc{
+		"/redfish/v1/":                               jsonHandler(r.serviceRoot),
+		"/redfish/v1/Chassis":                        jsonHandler(r.chassis),
+		"/redfish/v1/Chassis/1":                      jsonHandler(r.chassisItem),
+		"/redfish/v1/Chassis/1/Power":                jsonHandler(r.power),
+		"/redfish/v1/Chassis/1/Thermal":              jsonHandler(r.thermal),
+		"/redfish/v1/Chassis/1/NetworkAdapters":      jsonHandler(r.networkAdapters),
+		"/redfish/v1/Chassis/1/NetworkAdapters/1":    jsonHandler(r.networkAdapterItem),
+		"/redfish/v1/Systems":                        jsonHandler(r.systems),
+		"/redfish/v1/Systems/1":                      jsonHandler(r.systemItem),
+		"/redfish/v1/Systems/1/Memory":               jsonHandler(r.memory),
+		"/redfish/v1/Systems/1/Memory/1":             jsonHandler(r.memoryItem),
+		"/redfish/v1/Systems/1/EthernetInterfaces":   jsonHandler(r.ethernetInterfaces),
+		"/redfish/v1/Systems/1/EthernetInterfaces/1": jsonHandler(r.ethernetInterfaceItem),
+		"/redfish/v1/Managers":                       jsonHandler(r.managers),
+		"/redfish/v1/Managers/BMC":                   jsonHandler(r.managerItem),
+	}
+	for path, o := range r.overrides {
+		status, body := o.status, o.body
+		handlers[path] = func(w http.ResponseWriter, _ *http.Request) {
+			if body != "" {
+				w.Header().Set("Content-Type", "application/json")
+			}
+			w.WriteHeader(status)
+			if body != "" {
+				_, _ = w.Write([]byte(body))
+			}
+		}
 	}
 	mux := http.NewServeMux()
-	for path, body := range routes {
-		body := body
-		mux.HandleFunc(path, func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(body))
-		})
+	for path, handler := range handlers {
+		mux.Handle(path, handler)
 	}
 	return httptest.NewServer(mux)
+}
+
+// jsonHandler returns a handler that serves body as JSON with status 200.
+func jsonHandler(body string) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	}
 }
 
 // newTestGoFishClient connects a gofish client to the test server without authentication.

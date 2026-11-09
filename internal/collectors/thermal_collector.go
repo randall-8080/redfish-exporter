@@ -62,13 +62,18 @@ func (c *ThermalCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 // Collect satisfies prometheus.Collector; use redfish_collector_success to detect failures.
-func (c *ThermalCollector) Collect(ch chan<- prometheus.Metric) { _ = c.collect(ch) }
+// When run standalone it creates its own scrape context.
+func (c *ThermalCollector) Collect(ch chan<- prometheus.Metric) {
+	_ = c.collect(newScrapeContext(c.client, c.logger, false), ch)
+}
 
-func (c *ThermalCollector) collect(ch chan<- prometheus.Metric) error {
-	chassies, err := c.client.Service.Chassis()
+func (c *ThermalCollector) collect(ctx *scrapeContext, ch chan<- prometheus.Metric) error {
+	chassies, err := ctx.Chassis()
 	if err != nil {
-		c.logger.Error("failed to get chassis", "error", err, "target", c.target)
-		return fmt.Errorf("get chassis: %w", err)
+		c.logger.Error("failed to get chassis", "error", err, "fetched", len(chassies), "target", c.target)
+		if len(chassies) == 0 {
+			return fmt.Errorf("get chassis: %w", err)
+		}
 	}
 	for _, chassis := range chassies {
 		thermal, err := chassis.Thermal()
@@ -142,5 +147,5 @@ func (c *ThermalCollector) collect(ch chan<- prometheus.Metric) error {
 			}
 		}
 	}
-	return nil
+	return err
 }

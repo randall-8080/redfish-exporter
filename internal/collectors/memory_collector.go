@@ -49,9 +49,13 @@ func (c *MemoryCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 // Collect satisfies prometheus.Collector; use redfish_collector_success to detect failures.
-func (c *MemoryCollector) Collect(ch chan<- prometheus.Metric) { _ = c.collect(ch) }
+// Collect satisfies prometheus.Collector; use redfish_collector_success to detect failures.
+// When run standalone it creates its own scrape context.
+func (c *MemoryCollector) Collect(ch chan<- prometheus.Metric) {
+	_ = c.collect(newScrapeContext(c.client, c.logger, false), ch)
+}
 
-func (c *MemoryCollector) collect(ch chan<- prometheus.Metric) error {
+func (c *MemoryCollector) collect(_ *scrapeContext, ch chan<- prometheus.Metric) error {
 	systems, err := c.client.Service.Systems()
 	if err != nil {
 		c.logger.Error("failed to get systems", "error", err, "target", c.target)

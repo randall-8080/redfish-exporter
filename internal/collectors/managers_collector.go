@@ -45,9 +45,12 @@ func (c *ManagersCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 // Collect satisfies prometheus.Collector; use redfish_collector_success to detect failures.
-func (c *ManagersCollector) Collect(ch chan<- prometheus.Metric) { _ = c.collect(ch) }
+// When run standalone it creates its own scrape context.
+func (c *ManagersCollector) Collect(ch chan<- prometheus.Metric) {
+	_ = c.collect(newScrapeContext(c.client, c.logger, false), ch)
+}
 
-func (c *ManagersCollector) collect(ch chan<- prometheus.Metric) error {
+func (c *ManagersCollector) collect(_ *scrapeContext, ch chan<- prometheus.Metric) error {
 	managers, err := c.client.Service.Managers()
 	if err != nil {
 		c.logger.Error("failed to get managers", "error", err, "target", c.target)

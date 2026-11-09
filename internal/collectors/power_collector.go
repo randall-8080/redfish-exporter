@@ -129,13 +129,18 @@ func (c *PowerCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 // Collect satisfies prometheus.Collector; use redfish_collector_success to detect failures.
-func (c *PowerCollector) Collect(ch chan<- prometheus.Metric) { _ = c.collect(ch) }
+// When run standalone it creates its own scrape context.
+func (c *PowerCollector) Collect(ch chan<- prometheus.Metric) {
+	_ = c.collect(newScrapeContext(c.client, c.logger, false), ch)
+}
 
-func (c *PowerCollector) collect(ch chan<- prometheus.Metric) error {
-	chassies, err := c.client.Service.Chassis()
+func (c *PowerCollector) collect(ctx *scrapeContext, ch chan<- prometheus.Metric) error {
+	chassies, err := ctx.Chassis()
 	if err != nil {
-		c.logger.Error("failed to get chassis", "error", err, "target", c.target)
-		return fmt.Errorf("get chassis: %w", err)
+		c.logger.Error("failed to get chassis", "error", err, "fetched", len(chassies), "target", c.target)
+		if len(chassies) == 0 {
+			return fmt.Errorf("get chassis: %w", err)
+		}
 	}
 	for _, chassis := range chassies {
 		powerState := 0.0
@@ -249,5 +254,5 @@ func (c *PowerCollector) collect(ch chan<- prometheus.Metric) error {
 		}
 
 	}
-	return nil
+	return err
 }

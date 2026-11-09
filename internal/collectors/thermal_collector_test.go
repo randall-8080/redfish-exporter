@@ -1,8 +1,10 @@
 package collectors
 
 import (
+	"net/http"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 )
@@ -116,4 +118,40 @@ func TestThermalCollector_Collect_NilThermalResource(t *testing.T) {
 
 	// must not panic; nil guard skips the chassis silently
 	assert.Equal(t, 0, testutil.CollectAndCount(c))
+}
+
+func TestThermalCollector_Collect_PartialChassisList(t *testing.T) {
+	r := defaultResponses()
+	// Two chassis members, but the second returns 404: gofish returns the
+	// chassis it could fetch together with an error.
+	r.chassis = `{
+		"@odata.id": "/redfish/v1/Chassis",
+		"Members": [
+			{"@odata.id": "/redfish/v1/Chassis/1"},
+			{"@odata.id": "/redfish/v1/Chassis/2"}
+		],
+		"Members@odata.count": 2
+	}`
+	r.overrides = map[string]routeOverride{
+		"/redfish/v1/Chassis/2": {status: http.StatusNotFound},
+	}
+	srv := newTestServer(t, r)
+	defer srv.Close()
+	client := newTestGoFishClient(t, srv.URL)
+	c := NewThermalCollector(srv.URL, client, discardLogger())
+	ctx := newScrapeContext(client, discardLogger(), false)
+
+	ch := make(chan prometheus.Metric, 16)
+	err := c.collect(ctx, ch)
+	close(ch)
+
+	// The usable chassis is still collected, but the error is surfaced so
+	// redfish_collector_success reports the scrape as incomplete.
+	assert.Error(t, err)
+	count := 0
+	for range ch {
+		count++
+	}
+	// Chassis 1: temp_celsius + temp_health + fan_rpm + fan_health
+	assert.Equal(t, 4, count)
 }

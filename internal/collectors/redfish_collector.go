@@ -13,11 +13,13 @@ import (
 )
 
 // subCollector is the internal interface all per-subsystem collectors must implement.
-// collect returns a non-nil error when the top-level Redfish resource fetch fails,
-// allowing RedfishCollector to emit redfish_collector_success=0.
+// collect returns a non-nil error when a resource fetch failed; metrics that
+// were collected before the failure are still emitted, allowing
+// RedfishCollector to report redfish_collector_success=0 while keeping
+// partial data.
 type subCollector interface {
 	Describe(ch chan<- *prometheus.Desc)
-	collect(ch chan<- prometheus.Metric) error
+	collect(ctx *scrapeContext, ch chan<- prometheus.Metric) error
 }
 
 type namedCollector struct {
@@ -27,8 +29,13 @@ type namedCollector struct {
 
 type RedfishCollector struct {
 	target string
-	subs   []namedCollector
+	client *gofish.APIClient
 	logger *slog.Logger
+
+	// powerEnabled records whether the power sub-collector is part of this
+	// scrape; the shared scrape context uses it for cross-collector dedup.
+	powerEnabled bool
+	subs         []namedCollector
 
 	durationDesc *prometheus.Desc
 	successDesc  *prometheus.Desc
@@ -56,9 +63,11 @@ func NewRedfishCollector(target string, client *gofish.APIClient, logger *slog.L
 	}
 
 	return &RedfishCollector{
-		target: target,
-		subs:   subs,
-		logger: logger,
+		target:       target,
+		client:       client,
+		logger:       logger,
+		powerEnabled: cc.Power,
+		subs:         subs,
 		durationDesc: prometheus.NewDesc(
 			"redfish_exporter_collector_duration_seconds",
 			"Collector scrape duration",
@@ -86,15 +95,17 @@ func (c *RedfishCollector) Describe(ch chan<- *prometheus.Desc) {
 
 // Collect fans out to all sub-collectors in parallel and waits for all to
 // finish before returning. Writing directly to ch is safe because the registry
-// keeps ch open until Collect returns.
+// keeps ch open until Collect returns. All sub-collectors share one
+// scrapeContext so common resources are fetched only once per scrape.
 func (c *RedfishCollector) Collect(ch chan<- prometheus.Metric) {
+	ctx := newScrapeContext(c.client, c.logger, c.powerEnabled)
 	var wg sync.WaitGroup
 	wg.Add(len(c.subs))
 	for _, sc := range c.subs {
 		go func() {
 			defer wg.Done()
 			start := time.Now()
-			success := c.runCollector(sc, ch)
+			success := c.runCollector(ctx, sc, ch)
 			ch <- prometheus.MustNewConstMetric(c.successDesc, prometheus.GaugeValue, success, c.target, sc.name)
 			ch <- prometheus.MustNewConstMetric(c.durationDesc, prometheus.GaugeValue, time.Since(start).Seconds(), c.target, sc.name)
 		}()
@@ -104,7 +115,7 @@ func (c *RedfishCollector) Collect(ch chan<- prometheus.Metric) {
 
 // runCollector invokes sc.collect with panic recovery.
 // Returns 1.0 on success, 0.0 on error or panic.
-func (c *RedfishCollector) runCollector(sc namedCollector, ch chan<- prometheus.Metric) (success float64) {
+func (c *RedfishCollector) runCollector(ctx *scrapeContext, sc namedCollector, ch chan<- prometheus.Metric) (success float64) {
 	success = 1.0
 	c.logger.Debug("starting collector", "collector", sc.name, "target", c.target)
 	defer func() {
@@ -114,7 +125,7 @@ func (c *RedfishCollector) runCollector(sc namedCollector, ch chan<- prometheus.
 		}
 		c.logger.Debug("collector finished", "collector", sc.name, "success", success == 1.0, "target", c.target)
 	}()
-	if err := sc.c.collect(ch); err != nil {
+	if err := sc.c.collect(ctx, ch); err != nil {
 		c.logger.Debug("collector returned error", "collector", sc.name, "error", err, "target", c.target)
 		success = 0.0
 	}

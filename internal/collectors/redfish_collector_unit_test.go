@@ -25,20 +25,21 @@ func newStubCollector(name string) *stubCollector {
 
 func (s *stubCollector) Describe(ch chan<- *prometheus.Desc) { ch <- s.desc }
 
-func (s *stubCollector) collect(ch chan<- prometheus.Metric) error {
+func (s *stubCollector) collect(_ *scrapeContext, ch chan<- prometheus.Metric) error {
 	ch <- prometheus.MustNewConstMetric(s.desc, prometheus.GaugeValue, 1.0)
 	return nil
 }
 
-func (s *stubCollector) Collect(ch chan<- prometheus.Metric) { _ = s.collect(ch) }
+func (s *stubCollector) Collect(ch chan<- prometheus.Metric) { _ = s.collect(nil, ch) }
 
 // makeTestRedfishCollector builds a RedfishCollector with pre-built sub-collectors,
 // bypassing the gofish client dependency for unit testing.
 func makeTestRedfishCollector(target string, subs []namedCollector) *RedfishCollector {
 	return &RedfishCollector{
 		target: target,
-		subs:   subs,
+		client: nil,
 		logger: discardLogger(),
+		subs:   subs,
 		durationDesc: prometheus.NewDesc(
 			"redfish_exporter_collector_duration_seconds",
 			"Collector scrape duration",
